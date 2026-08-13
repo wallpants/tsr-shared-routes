@@ -7,7 +7,7 @@ import { SharedRoutesError } from "./errors";
 const ROUTE_EXT_RE = /\.(tsx|ts|jsx|js)$/;
 const VUE_EXT_RE = /\.vue$/;
 /** Our own generated helper siblings — never mirrored. */
-const GEN_FILE_RE = /\.gen\.(t|j)sx?$/;
+export const GEN_FILE_RE = /\.gen\.(t|j)sx?$/;
 /** Mirrors the stock generator's dot-flat split (escaped `[.]` is preserved). */
 const SPLIT_RE = /(?<!\[)\.(?!\])/g;
 /** Deprecated stock suffixes; they don't export `Route` and cannot be wrapped. */

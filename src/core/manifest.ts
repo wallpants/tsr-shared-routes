@@ -65,6 +65,7 @@ export function bannerScan(dirs: Array<string>): Array<string> {
       return; // dir vanished or is unreadable — nothing to scan
     }
     for (const entry of entries) {
+      if (entry.name === "node_modules") continue;
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(fullPath);
       else if (entry.isFile() && !entry.name.startsWith(".")) {
@@ -84,6 +85,11 @@ export interface CleanupOptions {
   manifest: Manifest | undefined;
   /** Absolute paths of the current run's target dirs. */
   currentTargetDirs: Array<string>;
+  /**
+   * Additional dirs banner-scanned for stale generated files (e.g. shared
+   * roots holding `.gen` helpers) but NEVER pruned — not created by this tool.
+   */
+  extraScanDirs?: Array<string>;
   /** Absolute paths of every file the current run wants on disk. */
   desiredPaths: Set<string>;
   /** When true, report what would be deleted without touching the FS. */
@@ -105,12 +111,19 @@ export interface CleanupResult {
  * pruned bottom-up when empty.
  */
 export function cleanupStale(options: CleanupOptions): CleanupResult {
-  const { root, manifest, currentTargetDirs, desiredPaths, dryRun = false } = options;
+  const {
+    root,
+    manifest,
+    currentTargetDirs,
+    extraScanDirs = [],
+    desiredPaths,
+    dryRun = false,
+  } = options;
 
   const manifestDirs = (manifest?.dirs ?? []).map((dir) => path.resolve(root, dir));
   const knownDirs = [...new Set([...manifestDirs, ...currentTargetDirs])];
 
-  const candidates = new Set<string>(bannerScan(knownDirs));
+  const candidates = new Set<string>(bannerScan([...new Set([...knownDirs, ...extraScanDirs])]));
   for (const entry of manifest?.files ?? []) {
     candidates.add(path.resolve(root, entry.path));
   }

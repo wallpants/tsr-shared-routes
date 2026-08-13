@@ -14,8 +14,10 @@ import { Route as FinancesRouteRouteImport } from './routes/finances/route'
 import { Route as InventoryRouteRouteImport } from './routes/inventory/route'
 import { Route as FinancesProvidersIndexRouteImport } from './routes/finances/providers/index'
 import { Route as FinancesProvidersProviderIdRouteImport } from './routes/finances/providers/$providerId'
+import { Route as FinancesProvidersChartRouteImport } from './routes/finances/providers/chart'
 import { Route as InventoryProvidersIndexRouteImport } from './routes/inventory/providers/index'
 import { Route as InventoryProvidersProviderIdRouteImport } from './routes/inventory/providers/$providerId'
+import { Route as InventoryProvidersChartRouteImport } from './routes/inventory/providers/chart'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -43,6 +45,13 @@ const FinancesProvidersProviderIdRoute =
     path: '/providers/$providerId',
     getParentRoute: () => FinancesRouteRoute,
   } as any)
+const FinancesProvidersChartRoute = FinancesProvidersChartRouteImport.update({
+  id: '/providers/chart',
+  path: '/providers/chart',
+  getParentRoute: () => FinancesRouteRoute,
+} as any).lazy(() =>
+  import('./routes/finances/providers/chart.lazy').then((d) => d.Route),
+)
 const InventoryProvidersIndexRoute = InventoryProvidersIndexRouteImport.update({
   id: '/providers/',
   path: '/providers/',
@@ -54,13 +63,22 @@ const InventoryProvidersProviderIdRoute =
     path: '/providers/$providerId',
     getParentRoute: () => InventoryRouteRoute,
   } as any)
+const InventoryProvidersChartRoute = InventoryProvidersChartRouteImport.update({
+  id: '/providers/chart',
+  path: '/providers/chart',
+  getParentRoute: () => InventoryRouteRoute,
+} as any).lazy(() =>
+  import('./routes/inventory/providers/chart.lazy').then((d) => d.Route),
+)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/finances': typeof FinancesRouteRouteWithChildren
   '/inventory': typeof InventoryRouteRouteWithChildren
   '/finances/providers/$providerId': typeof FinancesProvidersProviderIdRoute
+  '/finances/providers/chart': typeof FinancesProvidersChartRoute
   '/inventory/providers/$providerId': typeof InventoryProvidersProviderIdRoute
+  '/inventory/providers/chart': typeof InventoryProvidersChartRoute
   '/finances/providers/': typeof FinancesProvidersIndexRoute
   '/inventory/providers/': typeof InventoryProvidersIndexRoute
 }
@@ -69,7 +87,9 @@ export interface FileRoutesByTo {
   '/finances': typeof FinancesRouteRouteWithChildren
   '/inventory': typeof InventoryRouteRouteWithChildren
   '/finances/providers/$providerId': typeof FinancesProvidersProviderIdRoute
+  '/finances/providers/chart': typeof FinancesProvidersChartRoute
   '/inventory/providers/$providerId': typeof InventoryProvidersProviderIdRoute
+  '/inventory/providers/chart': typeof InventoryProvidersChartRoute
   '/finances/providers': typeof FinancesProvidersIndexRoute
   '/inventory/providers': typeof InventoryProvidersIndexRoute
 }
@@ -79,7 +99,9 @@ export interface FileRoutesById {
   '/finances': typeof FinancesRouteRouteWithChildren
   '/inventory': typeof InventoryRouteRouteWithChildren
   '/finances/providers/$providerId': typeof FinancesProvidersProviderIdRoute
+  '/finances/providers/chart': typeof FinancesProvidersChartRoute
   '/inventory/providers/$providerId': typeof InventoryProvidersProviderIdRoute
+  '/inventory/providers/chart': typeof InventoryProvidersChartRoute
   '/finances/providers/': typeof FinancesProvidersIndexRoute
   '/inventory/providers/': typeof InventoryProvidersIndexRoute
 }
@@ -90,7 +112,9 @@ export interface FileRouteTypes {
     | '/finances'
     | '/inventory'
     | '/finances/providers/$providerId'
+    | '/finances/providers/chart'
     | '/inventory/providers/$providerId'
+    | '/inventory/providers/chart'
     | '/finances/providers/'
     | '/inventory/providers/'
   fileRoutesByTo: FileRoutesByTo
@@ -99,7 +123,9 @@ export interface FileRouteTypes {
     | '/finances'
     | '/inventory'
     | '/finances/providers/$providerId'
+    | '/finances/providers/chart'
     | '/inventory/providers/$providerId'
+    | '/inventory/providers/chart'
     | '/finances/providers'
     | '/inventory/providers'
   id:
@@ -108,7 +134,9 @@ export interface FileRouteTypes {
     | '/finances'
     | '/inventory'
     | '/finances/providers/$providerId'
+    | '/finances/providers/chart'
     | '/inventory/providers/$providerId'
+    | '/inventory/providers/chart'
     | '/finances/providers/'
     | '/inventory/providers/'
   fileRoutesById: FileRoutesById
@@ -156,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinancesProvidersProviderIdRouteImport
       parentRoute: typeof FinancesRouteRoute
     }
+    '/finances/providers/chart': {
+      id: '/finances/providers/chart'
+      path: '/providers/chart'
+      fullPath: '/finances/providers/chart'
+      preLoaderRoute: typeof FinancesProvidersChartRouteImport
+      parentRoute: typeof FinancesRouteRoute
+    }
     '/inventory/providers/': {
       id: '/inventory/providers/'
       path: '/providers'
@@ -170,16 +205,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryProvidersProviderIdRouteImport
       parentRoute: typeof InventoryRouteRoute
     }
+    '/inventory/providers/chart': {
+      id: '/inventory/providers/chart'
+      path: '/providers/chart'
+      fullPath: '/inventory/providers/chart'
+      preLoaderRoute: typeof InventoryProvidersChartRouteImport
+      parentRoute: typeof InventoryRouteRoute
+    }
   }
 }
 
 interface FinancesRouteRouteChildren {
   FinancesProvidersProviderIdRoute: typeof FinancesProvidersProviderIdRoute
+  FinancesProvidersChartRoute: typeof FinancesProvidersChartRoute
   FinancesProvidersIndexRoute: typeof FinancesProvidersIndexRoute
 }
 
 const FinancesRouteRouteChildren: FinancesRouteRouteChildren = {
   FinancesProvidersProviderIdRoute: FinancesProvidersProviderIdRoute,
+  FinancesProvidersChartRoute: FinancesProvidersChartRoute,
   FinancesProvidersIndexRoute: FinancesProvidersIndexRoute,
 }
 
@@ -189,11 +233,13 @@ const FinancesRouteRouteWithChildren = FinancesRouteRoute._addFileChildren(
 
 interface InventoryRouteRouteChildren {
   InventoryProvidersProviderIdRoute: typeof InventoryProvidersProviderIdRoute
+  InventoryProvidersChartRoute: typeof InventoryProvidersChartRoute
   InventoryProvidersIndexRoute: typeof InventoryProvidersIndexRoute
 }
 
 const InventoryRouteRouteChildren: InventoryRouteRouteChildren = {
   InventoryProvidersProviderIdRoute: InventoryProvidersProviderIdRoute,
+  InventoryProvidersChartRoute: InventoryProvidersChartRoute,
   InventoryProvidersIndexRoute: InventoryProvidersIndexRoute,
 }
 

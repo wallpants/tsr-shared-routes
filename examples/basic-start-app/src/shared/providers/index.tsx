@@ -26,6 +26,10 @@ function ProvidersList() {
       <button onClick={() => navigate({ to: "./$providerId", params: { providerId: "acme" } })}>
         Jump to Acme
       </button>
+      <p>
+        {/* the .lazy pair: loader in chart.tsx, component code-split via chart.lazy.tsx */}
+        <shared.Link to="./chart">Balance chart</shared.Link>
+      </p>
     </div>
   );
 }

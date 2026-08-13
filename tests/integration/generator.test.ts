@@ -64,6 +64,17 @@ const WRAPPERS = [
   "src/routes/inventory/providers/stats.overview.tsx",
 ];
 
+// `.gen.tsx` typed-helper siblings, route files only (chart.lazy pairs with
+// chart.tsx, whose helper covers both).
+const HELPERS = [
+  "src/shared/providers/$providerId.gen.tsx",
+  "src/shared/providers/chart.gen.tsx",
+  "src/shared/providers/index.gen.tsx",
+  "src/shared/providers/stats.overview.gen.tsx",
+];
+
+const GENERATED = [...WRAPPERS, ...HELPERS];
+
 async function runGenerator(root: string): Promise<void> {
   const config = getConfig(
     {
@@ -96,11 +107,14 @@ describe("pipeline + real Generator", () => {
   it("emits wrappers the generator accepts verbatim, and both tools are idempotent", async () => {
     const root = makeProject();
 
-    // 1. Pipeline writes exactly the expected wrapper set.
+    // 1. Pipeline writes exactly the expected wrapper + helper set.
     const summary = runPipeline(makeConfig(root));
-    expect(summary.written).toEqual(WRAPPERS);
+    expect(summary.written).toEqual(GENERATED);
     expect(summary.deleted).toEqual([]);
     expect(summary.errors).toEqual([]);
+    for (const helper of HELPERS) {
+      expect(exists(path.join(root, ...helper.split("/")))).toBe(true);
+    }
 
     // 2. Real generator run: builds the tree, modifies ZERO wrapper files.
     const before = contentMap(root, WRAPPERS);
@@ -130,7 +144,7 @@ describe("pipeline + real Generator", () => {
     expect(second.written).toEqual([]);
     expect(second.adopted).toEqual([]);
     expect(second.deleted).toEqual([]);
-    expect(second.unchanged).toBe(WRAPPERS.length);
+    expect(second.unchanged).toBe(GENERATED.length);
 
     // 5. Second generator run: tree byte-stable.
     await runGenerator(root);
@@ -148,6 +162,7 @@ describe("pipeline + real Generator", () => {
     expect(summary.deleted).toEqual([
       "src/routes/admin.providers/$providerId.tsx",
       "src/routes/inventory/providers/$providerId.tsx",
+      "src/shared/providers/$providerId.gen.tsx",
     ]);
 
     await runGenerator(root);
@@ -173,6 +188,8 @@ describe("pipeline + real Generator", () => {
       "src/routes/admin.providers/reviews/index.tsx",
       "src/routes/inventory/providers/reviews/$reviewId.tsx",
       "src/routes/inventory/providers/reviews/index.tsx",
+      "src/shared/reviews/$reviewId.gen.tsx",
+      "src/shared/reviews/index.gen.tsx",
     ]);
 
     const nestedWrappers = [...WRAPPERS, ...summary.written];
@@ -239,6 +256,8 @@ describe("pipeline + real Generator", () => {
 
     const summary = runPipeline(makeConfig(root));
     expect(summary.written).toEqual([
+      "src/routes/inventory/-shared/providers/$providerId.gen.tsx",
+      "src/routes/inventory/-shared/providers/index.gen.tsx",
       "src/routes/inventory/providers/$providerId.tsx",
       "src/routes/inventory/providers/index.tsx",
     ]);
@@ -261,7 +280,7 @@ describe("pipeline + real Generator", () => {
     // Steady state holds here too.
     const second = runPipeline(makeConfig(root));
     expect(second.written).toEqual([]);
-    expect(second.unchanged).toBe(2);
+    expect(second.unchanged).toBe(4);
   });
 
   it("removing a mount cleans its wrappers and the generator drops the whole subtree", async () => {

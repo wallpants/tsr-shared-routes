@@ -7,6 +7,7 @@ import { resolveConfig } from "./config";
 import { isMountFile } from "./core/discover";
 import type { PipelineSummary } from "./core/pipeline";
 import { runPipeline } from "./core/pipeline";
+import { GEN_FILE_RE } from "./core/scan-shared";
 
 export type { SharedRoutesUserConfig } from "./config";
 
@@ -146,6 +147,8 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
         // and we write them — neither may re-trigger the pipeline.
         if (targetDirs.some((dir) => isWithin(dir, absPath))) return false;
         if (sharedRoots.some((dir) => isWithin(dir, absPath))) {
+          // Our own `.gen` helper writes must never re-trigger the pipeline.
+          if (GEN_FILE_RE.test(absPath)) return false;
           // Content edits flow through HMR; only structure changes need codegen.
           if (
             event === "add" ||

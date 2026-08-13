@@ -33,7 +33,8 @@ describe("cli main", () => {
     expect(code).toBe(0);
     expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(true);
     expect(io.logs).toContain("wrote src/routes/inventory/providers/$providerId.tsx");
-    expect(io.logs.at(-1)).toBe("done: 2 written, 0 deleted, 0 unchanged");
+    expect(io.logs).toContain("wrote src/shared/providers/$providerId.gen.tsx");
+    expect(io.logs.at(-1)).toBe("done: 4 written, 0 deleted, 0 unchanged");
   });
 
   it("--check on a dirty project prints would-be changes and exits 1 without writing", () => {
@@ -51,7 +52,7 @@ describe("cli main", () => {
     const io = makeIO();
     const code = main(["generate", "--check", "--root", root], io);
     expect(code).toBe(0);
-    expect(io.logs).toContain("clean: 2 generated file(s) up to date");
+    expect(io.logs).toContain("clean: 4 generated file(s) up to date");
   });
 
   it("honors shared-routes.config.json at the root", () => {

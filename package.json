@@ -31,6 +31,10 @@
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js",
       "require": "./dist/vite.cjs"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js"
     }
   },
   "scripts": {
