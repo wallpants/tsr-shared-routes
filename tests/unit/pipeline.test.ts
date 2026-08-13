@@ -219,6 +219,14 @@ describe("runPipeline", () => {
     const root = makeTmpDir();
     writeTree(root, { "src/routes/index.tsx": "export {}\n" });
     const summary = runPipeline(makeConfig(root));
-    expect(summary).toEqual({ written: [], adopted: [], deleted: [], unchanged: 0, errors: [] });
+    expect(summary).toEqual({
+      written: [],
+      adopted: [],
+      deleted: [],
+      unchanged: 0,
+      errors: [],
+      sharedRoots: [],
+      targetDirs: [],
+    });
   });
 });

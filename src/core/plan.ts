@@ -135,10 +135,28 @@ export function buildPlan(config: SharedRoutesConfig, mounts: Array<DiscoveredMo
     const sharedDirReal = fs.realpathSync(sharedDir);
     const routesDirReal = fs.existsSync(routesDir) ? fs.realpathSync(routesDir) : routesDir;
     if (isWithin(routesDirReal, sharedDirReal)) {
-      throw new SharedRoutesError(
-        "SHARED_DIR_INSIDE_ROUTES",
-        `shared directory ${sharedDir} (from mount ${mountFilePath}) is inside the routes directory ${routesDir}. The TanStack Router generator would double-scan it — move it outside.`,
-      );
+      // Colocation is allowed when some path component between the routes
+      // directory and the shared dir (the shared dir's own basename counts)
+      // starts with `routeFileIgnorePrefix`: the stock generator filters such
+      // directory names out before recursing (getRouteNodes.ts dirent filter),
+      // so the whole subtree is invisible to it and cannot be double-scanned.
+      const components = path
+        .relative(routesDirReal, sharedDirReal)
+        .split(path.sep)
+        .filter(Boolean);
+      const ignoredByGenerator =
+        config.routeFileIgnorePrefix !== "" &&
+        components.some((component) => component.startsWith(config.routeFileIgnorePrefix));
+      if (!ignoredByGenerator) {
+        const suggestion =
+          config.routeFileIgnorePrefix === ""
+            ? `move it outside ${routesDir}`
+            : `move it outside ${routesDir}, or nest it under a directory whose name starts with ${JSON.stringify(config.routeFileIgnorePrefix)} (e.g. ${path.join(path.dirname(sharedDir), config.routeFileIgnorePrefix + path.basename(sharedDir))}) so the generator ignores it`;
+        throw new SharedRoutesError(
+          "SHARED_DIR_INSIDE_ROUTES",
+          `shared directory ${sharedDir} (from mount ${mountFilePath}) is inside the routes directory ${routesDir}. The TanStack Router generator would double-scan it — ${suggestion}.`,
+        );
+      }
     }
     if (isWithin(sharedDirReal, routesDirReal)) {
       throw new SharedRoutesError(

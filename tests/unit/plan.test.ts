@@ -146,6 +146,58 @@ describe("buildPlan validation", () => {
     expectPlanError(root, "SHARED_DIR_INSIDE_ROUTES");
   });
 
+  it("rejects a colocated shared dir not under an ignore-prefixed directory", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("./shared"),
+      "src/routes/inventory/shared/index.tsx": "",
+    });
+    const error = expectPlanError(root, "SHARED_DIR_INSIDE_ROUTES");
+    expect(error.message).toContain('"-"');
+  });
+
+  it("accepts a colocated shared dir under an ignore-prefixed directory", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("./-shared/providers"),
+      "src/routes/inventory/-shared/providers/index.tsx": "",
+      "src/routes/inventory/-shared/providers/$providerId.tsx": "",
+    });
+    const plan = planFor(root);
+    const target = path.join(root, "src", "routes", "inventory", "providers");
+    expect(plan.targetDirs).toEqual([target]);
+    expect(plan.sharedRoots).toEqual([
+      path.join(root, "src", "routes", "inventory", "-shared", "providers"),
+    ]);
+    expect(plan.files.map((f) => f.targetPath).sort()).toEqual([
+      path.join(target, "$providerId.tsx"),
+      path.join(target, "index.tsx"),
+    ]);
+  });
+
+  it("accepts a colocated shared dir whose own basename is ignore-prefixed", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("./-providers"),
+      "src/routes/inventory/-providers/index.tsx": "",
+    });
+    const plan = planFor(root);
+    expect(plan.files).toHaveLength(1);
+  });
+
+  it("honors a routeFileIgnorePrefix override for colocated shared dirs", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("./~shared/providers"),
+      "src/routes/inventory/~shared/providers/index.tsx": "",
+    });
+    // Default prefix "-": "~shared" is NOT ignored by the generator → error.
+    expectPlanError(root, "SHARED_DIR_INSIDE_ROUTES");
+    // With the matching override the colocation is legal.
+    const plan = planFor(root, { routeFileIgnorePrefix: "~" });
+    expect(plan.files).toHaveLength(1);
+  });
+
   it("rejects a shared dir containing the routes directory", () => {
     const root = makeTmpDir();
     writeTree(root, {

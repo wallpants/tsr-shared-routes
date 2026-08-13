@@ -21,6 +21,10 @@ export interface PipelineSummary {
   unchanged: number;
   /** Non-fatal problems (hard failures throw SharedRoutesError instead). */
   errors: Array<string>;
+  /** Absolute paths of every shared dir involved in the plan (sorted). */
+  sharedRoots: Array<string>;
+  /** Absolute paths of every wrapper target dir (sorted). */
+  targetDirs: Array<string>;
 }
 
 export interface PipelineOptions {
@@ -157,6 +161,8 @@ export function runPipeline(
     deleted: deleted.map(rel).sort(),
     unchanged,
     errors: plan.warnings,
+    sharedRoots: plan.sharedRoots,
+    targetDirs: plan.targetDirs,
   };
 }
 
