@@ -24,24 +24,23 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "default": "./dist/index.js"
     },
     "./vite": {
       "types": "./dist/vite.d.ts",
-      "import": "./dist/vite.js",
-      "require": "./dist/vite.cjs"
+      "default": "./dist/vite.js"
     },
     "./cli": {
       "types": "./dist/cli.d.ts",
-      "import": "./dist/cli.js"
+      "default": "./dist/cli.js"
     }
   },
   "scripts": {
     "build": "tsup && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build && bun run test"
   },
   "dependencies": {
     "@tanstack/router-generator": "^1.167.28",
@@ -67,5 +66,8 @@
     "vite": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
