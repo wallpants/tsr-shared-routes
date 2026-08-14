@@ -33,12 +33,44 @@ function parseError(mountFilePath: string, reason: string): SharedRoutesError {
   );
 }
 
+/** Boilerplate written into byte-empty mount files (see scaffoldEmptyMountFile). */
+export const MOUNT_SCAFFOLD = `import { mount } from '${PACKAGE_NAME}'\n\nexport default mount('')\n`;
+
+export type MountClassification =
+  /** Well-formed with a non-empty shared-dir path. */
+  | { kind: "valid"; sharedDirRelative: string }
+  /** Blank file or `mount('')`: being authored right now — never an error. */
+  | { kind: "incomplete" }
+  /** Anything else; `error` carries the full accepted-form message. */
+  | { kind: "invalid"; error: SharedRoutesError };
+
 /**
- * Statically extracts the shared-dir path from a mount file. Mount files are
- * never executed — we accept exactly `export default mount('<literal>')` with
- * `mount` imported (possibly renamed) from '${PACKAGE_NAME}'.
+ * Statically classifies a mount file. Mount files are never executed — the
+ * only accepted form is `export default mount('<literal>')` with `mount`
+ * imported (possibly renamed) from '${PACKAGE_NAME}'. A blank file or an
+ * empty-string argument is `incomplete`, not `invalid`: that is the mid-edit
+ * state every mount file passes through (the scaffold writes `mount('')`).
+ */
+export function classifyMountFile(code: string, mountFilePath: string): MountClassification {
+  if (code.trim() === "") return { kind: "incomplete" };
+  try {
+    const sharedDirRelative = parseMountFileStrict(code, mountFilePath);
+    return sharedDirRelative === "" ? { kind: "incomplete" } : { kind: "valid", sharedDirRelative };
+  } catch (error) {
+    if (error instanceof SharedRoutesError) return { kind: "invalid", error };
+    throw error;
+  }
+}
+
+/**
+ * Strict variant: throws on invalid content, and returns "" for the
+ * incomplete `mount('')` form (blank files never reach it via classify).
  */
 export function parseMountFile(code: string, mountFilePath: string): string {
+  return parseMountFileStrict(code, mountFilePath);
+}
+
+function parseMountFileStrict(code: string, mountFilePath: string): string {
   let ast: ReturnType<typeof parseAst>;
   try {
     ast = parseAst({ code, filename: path.basename(mountFilePath) });
@@ -99,9 +131,6 @@ export function parseMountFile(code: string, mountFilePath: string): string {
   if (argument.type !== "StringLiteral") {
     throw parseError(mountFilePath, "the mount() argument must be a static string literal");
   }
-  if (argument.value === "") {
-    throw parseError(mountFilePath, "the mount() argument must not be empty");
-  }
   return argument.value;
 }
 
@@ -127,10 +156,73 @@ export function discoverMountFiles(routesDirectory: string): Array<string> {
   return found.sort();
 }
 
-/** Discovers and statically parses every mount file under `routesDirectory` (absolute). */
-export function discoverMounts(routesDirectory: string): Array<DiscoveredMount> {
-  return discoverMountFiles(routesDirectory).map((mountFilePath) => ({
-    mountFilePath,
-    sharedDirRelative: parseMountFile(fs.readFileSync(mountFilePath, "utf8"), mountFilePath),
-  }));
+/**
+ * Writes the mount boilerplate into a byte-empty (or whitespace-only) mount
+ * file so creating one in an editor immediately yields the accepted form with
+ * only the shared-dir path left to fill in. Returns true when scaffolded.
+ */
+export function scaffoldEmptyMountFile(mountFilePath: string, code: string): boolean {
+  if (code.trim() !== "") return false;
+  fs.writeFileSync(mountFilePath, MOUNT_SCAFFOLD, "utf8");
+  return true;
+}
+
+export interface DiscoverOptions {
+  /**
+   * Lenient (dev-server) mode: invalid mount files become warnings and are
+   * skipped instead of aborting discovery. Strict (CLI) mode throws.
+   */
+  lenient?: boolean;
+  /** Populate byte-empty mount files with the boilerplate scaffold. */
+  scaffold?: boolean;
+}
+
+export interface DiscoverResult {
+  mounts: Array<DiscoveredMount>;
+  /** Mount files skipped this pass (incomplete or, in lenient mode, invalid). */
+  skipped: Array<string>;
+  /** One line per skipped-invalid mount file (lenient mode only). */
+  warnings: Array<string>;
+  /** Root-relative-agnostic notes about incomplete files (CLI display only). */
+  incomplete: Array<string>;
+  /** Absolute paths of mount files that received the scaffold this pass. */
+  scaffolded: Array<string>;
+}
+
+/** Discovers and statically classifies every mount file under `routesDirectory` (absolute). */
+export function discoverMounts(
+  routesDirectory: string,
+  options: DiscoverOptions = {},
+): DiscoverResult {
+  const { lenient = false, scaffold = false } = options;
+  const mounts: Array<DiscoveredMount> = [];
+  const skipped: Array<string> = [];
+  const warnings: Array<string> = [];
+  const incomplete: Array<string> = [];
+  const scaffolded: Array<string> = [];
+
+  for (const mountFilePath of discoverMountFiles(routesDirectory)) {
+    const code = fs.readFileSync(mountFilePath, "utf8");
+    if (scaffold && scaffoldEmptyMountFile(mountFilePath, code)) {
+      scaffolded.push(mountFilePath);
+      skipped.push(mountFilePath);
+      incomplete.push(`mount file ${mountFilePath} is waiting for its shared-dir path`);
+      continue;
+    }
+    const classified = classifyMountFile(code, mountFilePath);
+    if (classified.kind === "valid") {
+      mounts.push({ mountFilePath, sharedDirRelative: classified.sharedDirRelative });
+    } else if (classified.kind === "incomplete") {
+      skipped.push(mountFilePath);
+      incomplete.push(`mount file ${mountFilePath} is waiting for its shared-dir path`);
+    } else if (lenient) {
+      skipped.push(mountFilePath);
+      warnings.push(
+        `skipping invalid mount file ${mountFilePath} (run \`tanstack-shared-routes generate\` for details)`,
+      );
+    } else {
+      throw classified.error;
+    }
+  }
+  return { mounts, skipped, warnings, incomplete, scaffolded };
 }

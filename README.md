@@ -29,7 +29,11 @@ export default defineConfig({
 
 (`routeFileIgnorePattern` is the exported constant `"\\.mount\\.(ts|js)$"` — import it instead of retyping the regex.)
 
-Declare a mount with a `*.mount.ts` file inside your routes directory. The file's own name and location decide where the shared directory mounts:
+## Your first shared routes
+
+The walkthrough assumes `vite dev` is running — the plugin scaffolds and regenerates as you save. **Mount first**: types flow from the generated route tree, so declaring where routes mount before authoring them gives you full typing from the first line (see [Authoring before mounting](#authoring-before-mounting) for the other order).
+
+**1. Declare the mount.** Create an empty `*.mount.ts` file inside your routes directory — the plugin immediately fills in the boilerplate. The file's own name and location decide where the shared directory mounts; you only type the relative path to the shared directory (it's fine if it doesn't exist yet):
 
 ```ts
 // src/routes/inventory/providers.mount.ts  →  mounts at /inventory/providers
@@ -38,6 +42,8 @@ import { mount } from "tanstack-shared-routes";
 export default mount("../../shared/providers");
 ```
 
+A second mount file is all it takes to mount the same directory somewhere else:
+
 ```ts
 // src/routes/finances/providers.mount.ts  →  same shared dir, second mount
 import { mount } from "tanstack-shared-routes";
@@ -45,7 +51,18 @@ import { mount } from "tanstack-shared-routes";
 export default mount("../../shared/providers");
 ```
 
-Author shared route files with `createSharedRoute` from the generated `.gen` sibling — same options as `createFileRoute`, plus typed hooks that resolve the current mount at runtime:
+**2. Create the shared route files.** Create an empty file in the shared directory using normal route-file names (`index.tsx`, `$providerId.tsx`, `route.tsx`, …). On save, the plugin populates it:
+
+```tsx
+// src/shared/providers/$providerId.tsx — scaffolded for you
+import { createSharedRoute } from "./$providerId.gen";
+
+export const shared = createSharedRoute({});
+```
+
+…and in the same pass generates the `$providerId.gen.tsx` sibling it imports, plus a wrapper route at every mount. Nothing is ever red: the `.gen` helper depends only on the file's name and the mount set, so it exists before you write a single option.
+
+**3. Author with full types.** `createSharedRoute` takes the same options as `createFileRoute`, and the returned `shared` carries typed hooks that resolve the current mount at runtime:
 
 ```tsx
 // src/shared/providers/$providerId.tsx
@@ -80,9 +97,24 @@ function ProviderDetail() {
 }
 ```
 
-Run `vite dev` (the plugin generates on start and watches), or `npx tanstack-shared-routes generate` for one-shot codegen. A working app lives in [`examples/basic-start-app`](examples/basic-start-app).
+Types compose across files exactly like stock file-based routes: create `$providerId.delete.tsx` next to the file above and its `shared.useParams()` is typed by `$providerId`'s validation.
 
-Two authoring rules: the route export **must be named `shared`** (generated wrappers import exactly that name; other exports are yours to use freely), and when you create a new shared route file, run the dev server or `generate` once so its `.gen` sibling exists before the `./<name>.gen` import resolves.
+One authoring rule: the route export **must be named `shared`** (generated wrappers import exactly that name; other exports are yours to use freely).
+
+Prefer one-shot codegen? `npx tanstack-shared-routes generate` runs the same pipeline without a dev server. A working app lives in [`examples/basic-start-app`](examples/basic-start-app).
+
+### Authoring before mounting
+
+`import { createSharedRoute } from "tanstack-shared-routes"` always resolves — the package exports a placeholder factory, so you can sketch shared route files before any mount exists. The placeholder is loosely typed by design: params, search, loader data, and navigation can only be typed against the generated route tree, which needs at least one mount. The moment a mount points at the directory, the codegen generates the typed `.gen` siblings and **retargets your imports to them automatically** (and back to the package, should the last mount disappear) — the same kind of in-place correction the stock generator applies to `createFileRoute` path literals when you move a file.
+
+### Mid-edit behavior
+
+The dev pipeline is built so half-finished files never break anything:
+
+- An empty or unfilled mount file (`mount('')`) is simply ignored until you fill in the path; a malformed one logs a single line and is skipped — codegen for everything else continues, and files generated for that mount are kept until it becomes valid (or is deleted).
+- A shared route file that doesn't export `shared` yet gets its `.gen` helper but no wrapper — the route appears when the export does. An existing route never disappears because of a mid-edit syntax error.
+- Generated files are cleaned up when their **source is gone** (shared file or mount file deleted), never because a file is temporarily invalid.
+- The CLI is strict where dev is forgiving: `generate` fails loudly on invalid mount files, and `generate --check` reports any drift for CI.
 
 ### What are the `.gen` files?
 
@@ -184,19 +216,19 @@ The CLI runs only this tool's pipeline — your build runs the stock generator a
 
 All options are optional (zero config works). Pass them to `sharedRoutes({ … })` or put them in `shared-routes.config.json`.
 
-| Option                        | Default                                                | Description                                                                   |
-| ----------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `routesDirectory`             | `./src/routes`                                         | Must match the TanStack Router/Start `routesDirectory`.                       |
-| `target`                      | `react`                                                | Which router package generated files import (`react` or `solid`).             |
-| `gitignore`                   | `false`                                                | Maintain a managed block in `.gitignore` covering generated files.            |
-| `banner`                      | `// Generated by tanstack-shared-routes. Do not edit.` | First line(s) of generated files; must keep the sentinel prefix.              |
-| `quoteStyle`                  | `single`                                               | Mirror of the stock generator option.                                         |
-| `semicolons`                  | `false`                                                | Mirror of the stock generator option.                                         |
-| `routeFileIgnorePrefix`       | `-`                                                    | Mirror of the stock generator option; also enables colocated shared dirs.     |
-| `indexToken`                  | `index`                                                | Mirror of the stock generator option.                                         |
-| `routeToken`                  | `route`                                                | Mirror of the stock generator option.                                         |
-| `manifestPath`                | `.tanstack/shared-routes/manifest.json`                | Manifest location, relative to the project root.                              |
-| `silenceIgnorePatternWarning` | `false`                                                | Hide the reminder about `routeFileIgnorePattern` when it's configured inline. |
+| Option                        | Default                                                | Description                                                                                                                                |
+| ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `routesDirectory`             | `./src/routes`                                         | Must match the TanStack Router/Start `routesDirectory`.                                                                                    |
+| `target`                      | `react`                                                | Which router package generated files import (`react` or `solid`).                                                                          |
+| `gitignore`                   | `false`                                                | Maintain a managed block in `.gitignore` covering generated files.                                                                         |
+| `banner`                      | `// Generated by tanstack-shared-routes. Do not edit.` | First line(s) of generated files; must keep the sentinel prefix.                                                                           |
+| `quoteStyle`                  | `single`                                               | Mirror of the stock generator option.                                                                                                      |
+| `semicolons`                  | `false`                                                | Mirror of the stock generator option.                                                                                                      |
+| `routeFileIgnorePrefix`       | `-`                                                    | Mirror of the stock generator option; also enables colocated shared dirs.                                                                  |
+| `indexToken`                  | `index`                                                | Mirror of the stock generator option.                                                                                                      |
+| `routeToken`                  | `route`                                                | Mirror of the stock generator option.                                                                                                      |
+| `manifestPath`                | `.tanstack/shared-routes/manifest.json`                | Manifest location, relative to the project root.                                                                                           |
+| `silenceIgnorePatternWarning` | `false`                                                | Hide the reminder about `routeFileIgnorePattern` when it's configured somewhere the plugin can't see (it only scans the Vite config file). |
 
 ## Limitations
 

@@ -41,7 +41,7 @@ export function computeImportPath(fromWrapperPath: string, toSharedFilePath: str
 export function renderWrapper(spec: WrapperSpec): string {
   const routerModule = `@tanstack/${spec.target}-router`;
   const importPath = computeImportPath(spec.targetPath, spec.sharedFilePath);
-  const header = `${spec.banner}\n// source: ${spec.sourceLabel} (mount: ${spec.mountLabel})\n`;
+  const header = `${spec.banner}\n/* eslint-disable */\n// source: ${spec.sourceLabel} (mount: ${spec.mountLabel})\n`;
 
   if (spec.kind === "wrapper-lazy") {
     return (

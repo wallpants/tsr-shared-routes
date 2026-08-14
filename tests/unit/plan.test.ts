@@ -8,7 +8,7 @@ import { makeConfig, makeTmpDir, mountFileSource, writeTree } from "../helpers";
 
 function planFor(root: string, overrides = {}) {
   const config = makeConfig(root, overrides);
-  const mounts = discoverMounts(path.join(root, "src", "routes"));
+  const { mounts } = discoverMounts(path.join(root, "src", "routes"));
   return buildPlan(config, mounts);
 }
 

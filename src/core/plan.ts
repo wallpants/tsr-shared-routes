@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { SharedRoutesConfig } from "../config";
 import type { DiscoveredMount } from "./discover";
-import { MOUNT_FILE_RE, parseMountFile } from "./discover";
+import { classifyMountFile, MOUNT_FILE_RE, scaffoldEmptyMountFile } from "./discover";
 import { SharedRoutesError } from "./errors";
 import { scanSharedDir } from "./scan-shared";
 
@@ -29,6 +29,23 @@ export interface Plan {
   /** Absolute paths of every shared dir involved (deduped). */
   sharedRoots: Array<string>;
   warnings: Array<string>;
+  /** Incomplete-state notes (mid-edit mount files); CLI display only. */
+  incomplete: Array<string>;
+  /** Absolute paths of nested mount files scaffolded this pass. */
+  scaffolded: Array<string>;
+  /**
+   * Mounts left out of this plan (incomplete, or failed in lenient mode).
+   * Non-zero puts the pipeline's stale cleanup on hold: files generated for a
+   * temporarily broken mount must survive until it is valid (or gone) again.
+   */
+  skippedMounts: number;
+}
+
+export interface PlanOptions {
+  /** Per-mount errors become warnings + skips instead of aborting the plan. */
+  lenient?: boolean;
+  /** Populate byte-empty nested mount files with the boilerplate scaffold. */
+  scaffold?: boolean;
 }
 
 /** True when `child` is inside (or equal to) `parent`. Both absolute. */
@@ -45,6 +62,11 @@ function routePrefixForDir(relDir: string): string {
 
 function mountName(mountFilePath: string): string {
   return path.basename(mountFilePath).replace(MOUNT_FILE_RE, "");
+}
+
+/** First line of a (potentially multi-line accepted-form) error message. */
+function firstLine(message: string): string {
+  return message.split("\n", 1)[0] ?? message;
 }
 
 function validateMountName(
@@ -88,18 +110,56 @@ interface ChainEntry {
  * the filesystem but never mutates it, and raises every validation error
  * before the pipeline writes anything.
  */
-export function buildPlan(config: SharedRoutesConfig, mounts: Array<DiscoveredMount>): Plan {
+export function buildPlan(
+  config: SharedRoutesConfig,
+  mounts: Array<DiscoveredMount>,
+  options: PlanOptions = {},
+): Plan {
+  const { lenient = false, scaffold = false } = options;
   const routesDir = path.resolve(config.root, config.routesDirectory);
   const files: Array<PlannedFile> = [];
   const targetDirs: Array<string> = [];
-  const sharedRoots = new Set<string>();
+  const sharedRoots: Array<string> = [];
   const warnings: Array<string> = [];
+  const incomplete: Array<string> = [];
+  const scaffolded: Array<string> = [];
+  let skippedMounts = 0;
+
+  /**
+   * Lenient-mode error boundary around one mount's whole expansion: on
+   * failure, everything the subtree contributed is rolled back and the mount
+   * is skipped with a one-line warning instead of aborting the plan.
+   */
+  const attempt = (mountFilePath: string, run: () => void): void => {
+    if (!lenient) {
+      run();
+      return;
+    }
+    const snapshot = {
+      files: files.length,
+      targetDirs: targetDirs.length,
+      sharedRoots: sharedRoots.length,
+    };
+    try {
+      run();
+    } catch (error) {
+      if (!(error instanceof SharedRoutesError)) throw error;
+      files.length = snapshot.files;
+      targetDirs.length = snapshot.targetDirs;
+      sharedRoots.length = snapshot.sharedRoots;
+      skippedMounts++;
+      warnings.push(`skipping mount ${mountFilePath}: ${firstLine(error.message)}`);
+    }
+  };
 
   // 1. Mount-name validation + top-level target mapping.
-  const topLevel = mounts.map((mount) => {
-    validateMountName(mount.mountFilePath, config, warnings);
-    return { ...mount, targetDir: mount.mountFilePath.replace(MOUNT_FILE_RE, "") };
-  });
+  const topLevel: Array<DiscoveredMount & { targetDir: string }> = [];
+  for (const mount of mounts) {
+    attempt(mount.mountFilePath, () => {
+      validateMountName(mount.mountFilePath, config, warnings);
+      topLevel.push({ ...mount, targetDir: mount.mountFilePath.replace(MOUNT_FILE_RE, "") });
+    });
+  }
 
   // 2. Overlap validation among top-level targets (equal or nested targets).
   for (let i = 0; i < topLevel.length; i++) {
@@ -218,29 +278,53 @@ export function buildPlan(config: SharedRoutesConfig, mounts: Array<DiscoveredMo
       }
 
       for (const nested of scan.nestedMounts) {
-        validateMountName(nested.mountFilePath, config, warnings);
-        const nestedSharedRelative = parseMountFile(
-          fs.readFileSync(nested.mountFilePath, "utf8"),
-          nested.mountFilePath,
-        );
-        const resolved = resolveSharedDir(nested.mountFilePath, nestedSharedRelative);
-        const nestedTargetDir = path.join(targetDir, ...nested.relTargetDir.split("/"));
-        expand(resolved.sharedDir, resolved.sharedDirReal, nestedTargetDir, nested.mountFilePath, [
-          ...chain,
-          { mountFilePath, sharedDirReal },
-        ]);
+        const code = fs.readFileSync(nested.mountFilePath, "utf8");
+        if (scaffold && scaffoldEmptyMountFile(nested.mountFilePath, code)) {
+          scaffolded.push(nested.mountFilePath);
+          skippedMounts++;
+          incomplete.push(`mount file ${nested.mountFilePath} is waiting for its shared-dir path`);
+          continue;
+        }
+        const classified = classifyMountFile(code, nested.mountFilePath);
+        if (classified.kind === "incomplete") {
+          skippedMounts++;
+          incomplete.push(`mount file ${nested.mountFilePath} is waiting for its shared-dir path`);
+          continue;
+        }
+        if (classified.kind === "invalid") {
+          if (!lenient) throw classified.error;
+          skippedMounts++;
+          warnings.push(
+            `skipping invalid mount file ${nested.mountFilePath} (run \`tanstack-shared-routes generate\` for details)`,
+          );
+          continue;
+        }
+        attempt(nested.mountFilePath, () => {
+          validateMountName(nested.mountFilePath, config, warnings);
+          const resolved = resolveSharedDir(nested.mountFilePath, classified.sharedDirRelative);
+          const nestedTargetDir = path.join(targetDir, ...nested.relTargetDir.split("/"));
+          expand(
+            resolved.sharedDir,
+            resolved.sharedDirReal,
+            nestedTargetDir,
+            nested.mountFilePath,
+            [...chain, { mountFilePath, sharedDirReal }],
+          );
+        });
       }
     } finally {
       gray.delete(sharedDirReal);
     }
 
     targetDirs.push(targetDir);
-    sharedRoots.add(sharedDir);
+    sharedRoots.push(sharedDir);
   };
 
   for (const mount of topLevel) {
-    const resolved = resolveSharedDir(mount.mountFilePath, mount.sharedDirRelative);
-    expand(resolved.sharedDir, resolved.sharedDirReal, mount.targetDir, mount.mountFilePath, []);
+    attempt(mount.mountFilePath, () => {
+      const resolved = resolveSharedDir(mount.mountFilePath, mount.sharedDirRelative);
+      expand(resolved.sharedDir, resolved.sharedDirReal, mount.targetDir, mount.mountFilePath, []);
+    });
   }
 
   // 4. No two planned files may claim the same target path (e.g. a shared dir
@@ -259,5 +343,13 @@ export function buildPlan(config: SharedRoutesConfig, mounts: Array<DiscoveredMo
 
   files.sort((a, b) => a.targetPath.localeCompare(b.targetPath));
   targetDirs.sort();
-  return { files, targetDirs, sharedRoots: [...sharedRoots].sort(), warnings };
+  return {
+    files,
+    targetDirs,
+    sharedRoots: [...new Set(sharedRoots)].sort(),
+    warnings,
+    incomplete,
+    scaffolded,
+    skippedMounts,
+  };
 }

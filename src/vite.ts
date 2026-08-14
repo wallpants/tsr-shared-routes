@@ -1,4 +1,4 @@
-import { getConfig } from "@tanstack/router-generator";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import type { Plugin } from "vite";
@@ -22,24 +22,25 @@ export const IGNORE_PATTERN_WARNING = [
   "  tanstackStart({ router: { routeFileIgnorePattern } })",
   "  // or: tanstackRouter({ routeFileIgnorePattern })",
   "",
-  "Already configured inline? Set silenceIgnorePatternWarning: true in sharedRoutes() to hide this warning.",
+  "Configured it somewhere else? Set silenceIgnorePatternWarning: true in sharedRoutes() to hide this warning.",
 ].join("\n");
 
 /**
  * Best-effort detection of a `routeFileIgnorePattern` covering mount files.
- * Only `tsr.config.json` is visible to us (via the stock `getConfig`) —
- * inline Vite-plugin config is not, hence warning (never erroring) and the
- * `silenceIgnorePatternWarning` escape hatch.
+ * The pattern is passed inline to TanStack's Vite plugin, whose resolved
+ * options live in a closure we cannot read at runtime — so we scan the Vite
+ * config source for the option name instead, hence warning (never erroring)
+ * and the `silenceIgnorePatternWarning` escape hatch.
  */
-export function detectIgnorePatternWarning(root: string): string | undefined {
-  try {
-    const stockConfig = getConfig({}, root);
-    const pattern = stockConfig.routeFileIgnorePattern;
-    if (pattern !== undefined && pattern !== "" && new RegExp(pattern).test("example.mount.ts")) {
-      return undefined;
+export function detectIgnorePatternWarning(configFile: string | undefined): string | undefined {
+  if (configFile !== undefined) {
+    try {
+      if (fs.readFileSync(configFile, "utf8").includes("routeFileIgnorePattern")) {
+        return undefined;
+      }
+    } catch {
+      // Unreadable config file — warn below.
     }
-  } catch {
-    // Missing/invalid tsr.config.json or an invalid pattern — warn below.
   }
   return IGNORE_PATTERN_WARNING;
 }
@@ -68,11 +69,21 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
   let routesDir = "";
   let sharedRoots: Array<string> = [];
   let targetDirs: Array<string> = [];
-  let pendingWarning: string | undefined;
+  let warned = false;
+  let pendingWarnings: Array<string> = [];
 
-  const applySummary = (summary: PipelineSummary): void => {
+  const applySummary = (
+    summary: PipelineSummary,
+    logger?: { warn: (msg: string, opts?: { timestamp: boolean }) => void },
+  ): void => {
     sharedRoots = summary.sharedRoots;
     targetDirs = summary.targetDirs;
+    const lines = summary.errors.map((warning) => `tanstack-shared-routes: ${warning}`);
+    if (logger === undefined) {
+      pendingWarnings = lines; // no logger yet in the config hook — defer
+    } else {
+      for (const line of lines) logger.warn(line, { timestamp: true });
+    }
   };
 
   return {
@@ -83,17 +94,16 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
       const root = path.resolve(viteConfig.root ?? process.cwd());
       resolved = resolveConfig(userConfig, root);
       routesDir = path.resolve(root, resolved.routesDirectory);
-      applySummary(runPipeline(resolved));
-      if (!resolved.silenceIgnorePatternWarning) {
-        pendingWarning = detectIgnorePatternWarning(root);
-      }
+      applySummary(runPipeline(resolved, { lenient: true }));
     },
 
     configResolved(viteConfig) {
-      if (pendingWarning !== undefined) {
-        viteConfig.logger.warn(pendingWarning);
-        pendingWarning = undefined;
-      }
+      for (const line of pendingWarnings) viteConfig.logger.warn(line);
+      pendingWarnings = [];
+      if (warned || resolved?.silenceIgnorePatternWarning !== false) return;
+      warned = true;
+      const warning = detectIgnorePatternWarning(viteConfig.configFile);
+      if (warning !== undefined) viteConfig.logger.warn(warning);
     },
 
     configureServer(server) {
@@ -123,7 +133,7 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
         }
         running = true;
         try {
-          applySummary(runPipeline(config));
+          applySummary(runPipeline(config, { lenient: true }), logger);
           watchDirs(); // mounts may reference shared roots we did not watch yet
         } catch (error) {
           // Never crash the dev server over a codegen problem.

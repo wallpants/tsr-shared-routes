@@ -25,9 +25,13 @@ function callConfig(plugin: Plugin, root: string): Promise<unknown> {
   );
 }
 
-function callConfigResolved(plugin: Plugin, logger: { warn: (msg: string) => void }): void {
+function callConfigResolved(
+  plugin: Plugin,
+  logger: { warn: (msg: string) => void },
+  configFile?: string,
+): void {
   const hook = plugin.configResolved as Handler<Plugin["configResolved"]>;
-  hook.call(undefined as never, { logger } as never);
+  hook.call(undefined as never, { logger, configFile } as never);
 }
 
 interface FakeServer {
@@ -102,27 +106,29 @@ describe("sharedRoutes vite plugin", () => {
     expect(warn).toHaveBeenCalledTimes(1);
   });
 
-  it("does not warn when tsr.config.json declares a matching ignore pattern", async () => {
+  it("does not warn when the vite config file mentions routeFileIgnorePattern", async () => {
     const root = makeFixture();
     writeTree(root, {
-      "tsr.config.json": JSON.stringify({ routeFileIgnorePattern: "\\.mount\\.(ts|js)$" }),
+      "vite.config.ts":
+        "import { routeFileIgnorePattern } from 'tanstack-shared-routes'\n" +
+        "export default { plugins: [tanstackStart({ router: { routeFileIgnorePattern } })] }\n",
     });
     const plugin = sharedRoutes();
     await callConfig(plugin, root);
     const warn = vi.fn();
-    callConfigResolved(plugin, { warn });
+    callConfigResolved(plugin, { warn }, path.join(root, "vite.config.ts"));
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("warns when tsr.config.json has a pattern that does not cover mount files", async () => {
+  it("warns when the vite config file does not mention routeFileIgnorePattern", async () => {
     const root = makeFixture();
     writeTree(root, {
-      "tsr.config.json": JSON.stringify({ routeFileIgnorePattern: "\\.test\\.ts$" }),
+      "vite.config.ts": "export default { plugins: [tanstackStart()] }\n",
     });
     const plugin = sharedRoutes();
     await callConfig(plugin, root);
     const warn = vi.fn();
-    callConfigResolved(plugin, { warn });
+    callConfigResolved(plugin, { warn }, path.join(root, "vite.config.ts"));
     expect(warn).toHaveBeenCalledTimes(1);
   });
 

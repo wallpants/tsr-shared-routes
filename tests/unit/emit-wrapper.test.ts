@@ -44,6 +44,7 @@ describe("renderWrapper", () => {
     const content = renderWrapper({ ...BASE, kind: "wrapper" });
     expect(content).toBe(
       `${DEFAULT_BANNER}
+/* eslint-disable */
 // source: src/shared/providers/$providerId.tsx (mount: src/routes/inventory/providers.mount.ts)
 import type { Register } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
@@ -79,6 +80,7 @@ export const Route = createFileRoute('/inventory/providers/$providerId')<
     });
     expect(content).toBe(
       `${DEFAULT_BANNER}
+/* eslint-disable */
 // source: src/shared/providers/chart.lazy.tsx (mount: src/routes/inventory/providers.mount.ts)
 import { createLazyFileRoute } from '@tanstack/react-router'
 import { sharedLazy } from '../../../shared/providers/chart.lazy'

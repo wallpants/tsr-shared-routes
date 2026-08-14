@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { SharedRoutesConfig } from "../config";
 import { discoverMounts } from "./discover";
@@ -6,10 +7,18 @@ import { decideWrite, renderWrapper } from "./emit-wrapper";
 import { SharedRoutesError } from "./errors";
 import { atomicWrite, isOwned, maskedHash, readIfExists } from "./fsio";
 import { updateGitignore } from "./gitignore";
-import type { ManifestFileEntry } from "./manifest";
+import type { Manifest, ManifestFileEntry } from "./manifest";
 import { cleanupStale, readManifest, writeManifest } from "./manifest";
 import { buildPlan } from "./plan";
+import { rewriteToHelper, rewriteToPackage } from "./rewrite-imports";
 import { computeRouteIdLiteral } from "./route-id";
+import {
+  hasSharedExport,
+  hasSharedLazyExport,
+  scaffoldIfEmpty,
+  sharedLazyScaffold,
+  sharedRouteScaffold,
+} from "./scaffold";
 
 export interface PipelineSummary {
   /** Root-relative posix paths written (or that would be written in check mode). */
@@ -22,6 +31,12 @@ export interface PipelineSummary {
   unchanged: number;
   /** Non-fatal problems (hard failures throw SharedRoutesError instead). */
   errors: Array<string>;
+  /** Mid-edit states (unfilled mount files, missing `shared` exports) — informational. */
+  incomplete: Array<string>;
+  /** Root-relative posix paths of user files populated with boilerplate this pass. */
+  scaffolded: Array<string>;
+  /** Root-relative posix paths of shared files whose factory import was retargeted. */
+  rewritten: Array<string>;
   /** Absolute paths of every shared dir involved in the plan (sorted). */
   sharedRoots: Array<string>;
   /** Absolute paths of every wrapper target dir (sorted). */
@@ -31,29 +46,66 @@ export interface PipelineSummary {
 export interface PipelineOptions {
   /** Report what WOULD change without writing anything (CLI --check). */
   check?: boolean;
+  /**
+   * Dev-server mode: per-mount problems become warnings + skips instead of
+   * aborting the whole pass, and stale cleanup is held while any mount is
+   * skipped (a temporarily broken mount must not lose its generated files).
+   */
+  lenient?: boolean;
 }
 
 /**
- * Full codegen pass: discover mounts → scan shared dirs → plan → compute
- * route-id literals → render wrappers → diff/adopt → atomic writes → stale
- * cleanup → manifest → gitignore. All validation errors are raised before the
- * first filesystem mutation. No Vite coupling lives here.
+ * Full codegen pass: discover mounts → scan shared dirs → plan → scaffold →
+ * compute route-id literals → render wrappers → diff/adopt → atomic writes →
+ * import retargeting → stale cleanup → manifest → gitignore. Validation
+ * errors are raised before the first generated-file write (scaffolding of
+ * byte-empty user files is the one additive mutation allowed earlier).
  */
 export function runPipeline(
   config: SharedRoutesConfig,
   options: PipelineOptions = {},
 ): PipelineSummary {
   const check = options.check ?? false;
+  const lenient = options.lenient ?? false;
+  const scaffold = !check;
   const root = config.root;
   const routesDir = path.resolve(root, config.routesDirectory);
   const manifestPath = path.resolve(root, config.manifestPath);
   const rel = (p: string): string => path.relative(root, p).split(path.sep).join("/");
 
-  // 1-2. Discover + plan (read-only; throws on any invalid configuration).
-  const mounts = discoverMounts(routesDir);
-  const plan = buildPlan(config, mounts);
+  // 1-2. Discover + plan (throws only in strict mode / on global conflicts).
+  const discovery = discoverMounts(routesDir, { lenient, scaffold });
+  const plan = buildPlan(config, discovery.mounts, { lenient, scaffold });
+  const warnings = [...discovery.warnings, ...plan.warnings];
+  const incomplete = [...discovery.incomplete, ...plan.incomplete];
+  const scaffolded = [...discovery.scaffolded, ...plan.scaffolded];
+  const skippedMounts = discovery.skipped.length + plan.skippedMounts;
 
-  // 3. Compute literals and render desired content.
+  // 3. Scaffold byte-empty shared route files. The `.gen` helper each
+  //    scaffold imports is emitted later in this same pass (it depends only
+  //    on the file name and the mount set), so scaffolded files are valid
+  //    from birth and their wrappers are never deferred.
+  const sharedContent = new Map<string, string | undefined>();
+  const readShared = (filePath: string): string | undefined => {
+    if (!sharedContent.has(filePath)) sharedContent.set(filePath, readIfExists(filePath));
+    return sharedContent.get(filePath);
+  };
+  if (scaffold) {
+    for (const file of plan.files) {
+      const existing = readShared(file.sharedFilePath);
+      if (existing === undefined || existing.trim() !== "") continue;
+      const content =
+        file.kind === "wrapper-lazy"
+          ? sharedLazyScaffold(config.target)
+          : sharedRouteScaffold(file.sharedFilePath);
+      if (scaffoldIfEmpty(file.sharedFilePath, existing, content)) {
+        sharedContent.set(file.sharedFilePath, content);
+        scaffolded.push(file.sharedFilePath);
+      }
+    }
+  }
+
+  // 4. Compute literals and render desired content.
   const desired = plan.files.map((file) => {
     const wrapperRelPath = path.relative(routesDir, file.targetPath).split(path.sep).join("/");
     const routeIdLiteral = computeRouteIdLiteral(wrapperRelPath, {
@@ -73,10 +125,12 @@ export function runPipeline(
     return { file, routeIdLiteral, content };
   });
 
-  // 3b. Helpers: one `<base>.gen.tsx` sibling per shared ROUTE file (non-lazy),
+  // 4b. Helpers: one `<base>.gen.tsx` sibling per shared ROUTE file (non-lazy),
   //     parameterized by that file's route ids under EVERY mount of its shared
   //     dir (nested-mount expansions included — one wrapper per mount, and each
-  //     wrapper's already-computed literal IS the mount id).
+  //     wrapper's already-computed literal IS the mount id). Computed from the
+  //     FULL plan, before the shared-export gate: the helper must exist even
+  //     while its source file is still being authored.
   const helperMountIds = new Map<string, Array<string>>();
   for (const { file, routeIdLiteral } of desired) {
     if (file.kind !== "wrapper") continue; // lazy shared files need no helper
@@ -97,9 +151,32 @@ export function runPipeline(
     }))
     .sort((a, b) => a.helperPath.localeCompare(b.helperPath));
 
-  // 4. Ownership pre-check on EVERY target before any write happens.
+  // 4c. Shared-export gate: a wrapper imports `shared` (or `sharedLazy`) from
+  //     its source file, so emitting it before that export exists would break
+  //     the route tree on every save while the file is authored. Such wrappers
+  //     are deferred: not written this pass, but still desired (protected from
+  //     cleanup) — the source file EXISTS, it is just not finished yet.
+  const emitted: typeof desired = [];
+  const notedUnready = new Set<string>();
+  for (const entry of desired) {
+    const code = readShared(entry.file.sharedFilePath) ?? "";
+    const ready =
+      entry.file.kind === "wrapper-lazy" ? hasSharedLazyExport(code) : hasSharedExport(code);
+    if (ready) {
+      emitted.push(entry);
+    } else if (!notedUnready.has(entry.file.sharedFilePath)) {
+      notedUnready.add(entry.file.sharedFilePath);
+      incomplete.push(
+        `${rel(entry.file.sharedFilePath)} does not export \`${
+          entry.file.kind === "wrapper-lazy" ? "sharedLazy" : "shared"
+        }\` yet — wrapper not generated`,
+      );
+    }
+  }
+
+  // 5. Ownership pre-check on every emitted target before any write happens.
   const existingByPath = new Map<string, string | undefined>();
-  for (const { file } of desired) {
+  for (const { file } of emitted) {
     const existing = readIfExists(file.targetPath);
     if (existing !== undefined && !isOwned(existing)) {
       throw new SharedRoutesError(
@@ -120,12 +197,12 @@ export function runPipeline(
     existingByPath.set(helper.helperPath, existing);
   }
 
-  // 5. Diff, adopt generator-corrected literals, write atomically.
+  // 6. Diff, adopt generator-corrected literals, write atomically.
   const written: Array<string> = [];
   const adopted: Array<string> = [];
   let unchanged = 0;
   const finalContent = new Map<string, string>();
-  for (const { file, content } of desired) {
+  for (const { file, content } of emitted) {
     const decision = decideWrite(existingByPath.get(file.targetPath), content);
     finalContent.set(file.targetPath, decision.content);
     if (decision.action === "write") {
@@ -149,22 +226,70 @@ export function runPipeline(
     }
   }
 
-  // 6. Stale cleanup (manifest ∪ banner scan, banner re-confirmed at unlink).
+  // 6b. Retarget factory imports: a shared file still importing the package
+  //     placeholder gets its specifier pointed at the now-existing `.gen`
+  //     sibling (the module specifier is the only thing touched — the same
+  //     class of in-place correction the stock generator applies to route-id
+  //     literals in user files).
+  const rewritten: Array<string> = [];
+  if (!check) {
+    for (const helper of desiredHelpers) {
+      const code = readShared(helper.sharedFilePath);
+      if (code === undefined) continue;
+      const next = rewriteToHelper(code, helper.sharedFilePath);
+      if (next !== undefined) {
+        fs.writeFileSync(helper.sharedFilePath, next, "utf8");
+        sharedContent.set(helper.sharedFilePath, next);
+        rewritten.push(rel(helper.sharedFilePath));
+      }
+    }
+  }
+
+  // 7. Stale cleanup (manifest ∪ banner scan, banner re-confirmed at unlink).
   //    Shared roots are banner-scanned for stale helpers but never pruned —
-  //    they are user directories this tool did not create.
+  //    they are user directories this tool did not create. Deferred wrappers
+  //    count as desired: their source file exists, so they are not stale.
+  //    While any mount is skipped (mid-edit), cleanup is held entirely: files
+  //    of a temporarily broken mount must survive until it is valid again.
   const previousManifest = readManifest(manifestPath);
   const desiredPaths = new Set(desired.map(({ file }) => file.targetPath));
   for (const helper of desiredHelpers) desiredPaths.add(helper.helperPath);
-  const { deleted } = cleanupStale({
-    root,
-    manifest: previousManifest,
-    currentTargetDirs: plan.targetDirs,
-    extraScanDirs: plan.sharedRoots,
-    desiredPaths,
-    dryRun: check,
-  });
+  const holdCleanup = skippedMounts > 0;
+  const { deleted } = holdCleanup
+    ? { deleted: [] as Array<string> }
+    : cleanupStale({
+        root,
+        manifest: previousManifest,
+        currentTargetDirs: plan.targetDirs,
+        extraScanDirs: plan.sharedRoots,
+        desiredPaths,
+        dryRun: check,
+      });
 
-  // 7. New manifest: desired files + every directory we own.
+  // 7b. Un-mounting must not leave red imports behind: when a helper was
+  //     cleaned up, point the sibling source file's factory import back at
+  //     the package placeholder.
+  if (!check) {
+    for (const deletedPath of deleted) {
+      if (!/\.gen\.tsx$/.test(deletedPath)) continue;
+      const base = deletedPath.replace(/\.gen\.tsx$/, "");
+      for (const ext of [".tsx", ".ts", ".jsx", ".js"]) {
+        const sourcePath = `${base}${ext}`;
+        const code = readIfExists(sourcePath);
+        if (code === undefined) continue;
+        const next = rewriteToPackage(code, sourcePath);
+        if (next !== undefined) {
+          fs.writeFileSync(sourcePath, next, "utf8");
+          rewritten.push(rel(sourcePath));
+        }
+        break;
+      }
+    }
+  }
+
+  // 8. New manifest: desired files + every directory we own. While cleanup is
+  //    held, entries for skipped mounts are carried over from the previous
+  //    manifest so their files are still tracked once the mount heals.
   if (!check) {
     const isWithin = (parent: string, child: string): boolean => {
       const relPath = path.relative(parent, child);
@@ -184,7 +309,7 @@ export function runPipeline(
         role: "wrapper",
         mount: rel(file.mountFilePath),
         source: rel(file.sharedFilePath),
-        hash: maskedHash(finalContent.get(file.targetPath)!),
+        hash: maskedHash(finalContent.get(file.targetPath) ?? ""),
       })),
       ...desiredHelpers.map((helper): ManifestFileEntry => ({
         path: rel(helper.helperPath),
@@ -193,14 +318,18 @@ export function runPipeline(
         hash: maskedHash(helper.content),
       })),
     ];
+    const dirs = new Set([...dirSet].map(rel));
+    if (holdCleanup && previousManifest !== undefined) {
+      carryOverManifest(previousManifest, files, dirs);
+    }
     writeManifest(manifestPath, {
       version: 1,
       files,
-      dirs: [...dirSet].map(rel).sort(),
+      dirs: [...dirs].sort(),
     });
   }
 
-  // 8. Managed .gitignore block (removed when the option is off).
+  // 9. Managed .gitignore block (removed when the option is off).
   updateGitignore({
     gitignorePath: path.join(root, ".gitignore"),
     enabled: config.gitignore,
@@ -218,10 +347,26 @@ export function runPipeline(
     adopted,
     deleted: deleted.map(rel).sort(),
     unchanged,
-    errors: plan.warnings,
+    errors: warnings,
+    incomplete,
+    scaffolded: scaffolded.map(rel).sort(),
+    rewritten: rewritten.sort(),
     sharedRoots: plan.sharedRoots,
     targetDirs: plan.targetDirs,
   };
+}
+
+/** Merges previous-manifest entries for paths the current pass does not claim. */
+function carryOverManifest(
+  previous: Manifest,
+  files: Array<ManifestFileEntry>,
+  dirs: Set<string>,
+): void {
+  const claimed = new Set(files.map((entry) => entry.path));
+  for (const entry of previous.files) {
+    if (!claimed.has(entry.path)) files.push(entry);
+  }
+  for (const dir of previous.dirs) dirs.add(dir);
 }
 
 /** Check mode for CI drift guards: returns what WOULD change, writes nothing. */

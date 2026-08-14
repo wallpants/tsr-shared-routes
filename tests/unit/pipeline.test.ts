@@ -306,8 +306,168 @@ describe("runPipeline", () => {
       deleted: [],
       unchanged: 0,
       errors: [],
+      incomplete: [],
+      scaffolded: [],
+      rewritten: [],
       sharedRoots: [],
       targetDirs: [],
     });
+  });
+});
+
+describe("runPipeline mid-edit DX", () => {
+  it("scaffolds byte-empty mount files and route files in shared dirs", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/routes/finances/reviews.mount.ts": "",
+      "src/shared/providers/$providerId.tsx": "",
+      "src/shared/providers/chart.lazy.tsx": "",
+    });
+    const summary = runPipeline(makeConfig(root), { lenient: true });
+
+    expect(summary.scaffolded).toEqual([
+      "src/routes/finances/reviews.mount.ts",
+      "src/shared/providers/$providerId.tsx",
+      "src/shared/providers/chart.lazy.tsx",
+    ]);
+    expect(readFile(path.join(root, "src/routes/finances/reviews.mount.ts"))).toContain(
+      "export default mount('')",
+    );
+    expect(readFile(path.join(root, "src/shared/providers/$providerId.tsx"))).toBe(
+      "import { createSharedRoute } from './$providerId.gen'\n\nexport const shared = createSharedRoute({})\n",
+    );
+    expect(readFile(path.join(root, "src/shared/providers/chart.lazy.tsx"))).toBe(
+      "import type { LazyRouteOptions } from '@tanstack/react-router'\n\nexport const sharedLazy = {} satisfies LazyRouteOptions\n",
+    );
+    // scaffolded files are valid from birth: wrapper + helper emitted this same pass
+    expect(exists(path.join(root, "src/routes/inventory/providers/$providerId.tsx"))).toBe(true);
+    expect(exists(path.join(root, "src/shared/providers/$providerId.gen.tsx"))).toBe(true);
+    expect(summary.incomplete.some((n) => n.includes("reviews.mount.ts"))).toBe(true);
+  });
+
+  it("check mode never scaffolds", () => {
+    const root = makeTmpDir();
+    writeTree(root, { "src/routes/reviews.mount.ts": "" });
+    const summary = runPipeline(makeConfig(root), { check: true });
+    expect(summary.scaffolded).toEqual([]);
+    expect(readFile(path.join(root, "src/routes/reviews.mount.ts"))).toBe("");
+  });
+
+  it("defers the wrapper until the shared file exports `shared`, but emits the helper", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/shared/providers/$providerId.tsx": "// authoring in progress\n",
+    });
+    const summary = runPipeline(makeConfig(root), { lenient: true });
+
+    expect(exists(path.join(root, "src/routes/inventory/providers/$providerId.tsx"))).toBe(false);
+    expect(exists(path.join(root, "src/shared/providers/$providerId.gen.tsx"))).toBe(true);
+    expect(summary.incomplete.some((n) => n.includes("does not export `shared`"))).toBe(true);
+
+    // export appears → wrapper lands
+    writeTree(root, {
+      "src/shared/providers/$providerId.tsx": "export const shared = {} as any\n",
+    });
+    runPipeline(makeConfig(root), { lenient: true });
+    expect(exists(path.join(root, "src/routes/inventory/providers/$providerId.tsx"))).toBe(true);
+  });
+
+  it("keeps an existing wrapper when its source file goes temporarily invalid", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/shared/providers/$providerId.tsx": "export const shared = {} as any\n",
+    });
+    runPipeline(makeConfig(root), { lenient: true });
+    const wrapper = path.join(root, "src/routes/inventory/providers/$providerId.tsx");
+    expect(exists(wrapper)).toBe(true);
+
+    // export vanishes mid-edit: wrapper survives (cleanup keys on file-gone)
+    writeTree(root, { "src/shared/providers/$providerId.tsx": "// half-typed refactor\n" });
+    const summary = runPipeline(makeConfig(root), { lenient: true });
+    expect(exists(wrapper)).toBe(true);
+    expect(summary.deleted).toEqual([]);
+
+    // file actually deleted: wrapper + helper cleaned up
+    fs.rmSync(path.join(root, "src/shared/providers/$providerId.tsx"));
+    const afterDelete = runPipeline(makeConfig(root), { lenient: true });
+    expect(exists(wrapper)).toBe(false);
+    expect(afterDelete.deleted).toContain("src/shared/providers/$providerId.gen.tsx");
+  });
+
+  it("holds cleanup while a mount file is incomplete or invalid, resumes after", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/shared/providers/index.tsx": "export const shared = {} as any\n",
+    });
+    runPipeline(makeConfig(root), { lenient: true });
+    const wrapper = path.join(root, "src/routes/inventory/providers/index.tsx");
+    expect(exists(wrapper)).toBe(true);
+
+    // mount file broken mid-edit: generated files survive, one short warning
+    writeTree(root, { "src/routes/inventory/providers.mount.ts": "garbage ((((" });
+    const broken = runPipeline(makeConfig(root), { lenient: true });
+    expect(exists(wrapper)).toBe(true);
+    expect(broken.deleted).toEqual([]);
+    expect(broken.errors.some((w) => w.includes("skipping invalid mount file"))).toBe(true);
+
+    // strict mode still throws for the same state
+    expect(() => runPipeline(makeConfig(root))).toThrow(SharedRoutesError);
+
+    // mount healed: back to normal, nothing stale
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+    });
+    const healed = runPipeline(makeConfig(root), { lenient: true });
+    expect(healed.deleted).toEqual([]);
+    expect(exists(wrapper)).toBe(true);
+
+    // mount file gone: generated tree cleaned up
+    fs.rmSync(path.join(root, "src/routes/inventory/providers.mount.ts"));
+    runPipeline(makeConfig(root), { lenient: true });
+    expect(exists(wrapper)).toBe(false);
+    expect(exists(path.join(root, "src/shared/providers/index.gen.tsx"))).toBe(false);
+  });
+
+  it("skips a broken mount in lenient mode without losing the healthy ones", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/routes/finances/reviews.mount.ts": mountFileSource("../../shared/missing-dir"),
+      "src/shared/providers/index.tsx": "export const shared = {} as any\n",
+    });
+    const summary = runPipeline(makeConfig(root), { lenient: true });
+    expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(true);
+    expect(summary.errors.some((w) => w.includes("reviews.mount.ts"))).toBe(true);
+    expect(() => runPipeline(makeConfig(root))).toThrow(SharedRoutesError); // strict still throws
+  });
+
+  it("retargets the factory import from the package to the .gen sibling and back", () => {
+    const root = makeTmpDir();
+    const source =
+      "import { createSharedRoute } from 'tanstack-shared-routes'\n\nexport const shared = createSharedRoute({})\n";
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/shared/providers/$providerId.tsx": source,
+    });
+    const summary = runPipeline(makeConfig(root));
+    expect(summary.rewritten).toEqual(["src/shared/providers/$providerId.tsx"]);
+    const sharedFile = path.join(root, "src/shared/providers/$providerId.tsx");
+    expect(readFile(sharedFile)).toBe(
+      "import { createSharedRoute } from './$providerId.gen'\n\nexport const shared = createSharedRoute({})\n",
+    );
+
+    // idempotent: nothing to retarget on the next pass
+    expect(runPipeline(makeConfig(root)).rewritten).toEqual([]);
+
+    // last mount disappears: helper cleaned up, import pointed back at the package
+    fs.rmSync(path.join(root, "src/routes/inventory/providers.mount.ts"));
+    const unmounted = runPipeline(makeConfig(root));
+    expect(unmounted.rewritten).toEqual(["src/shared/providers/$providerId.tsx"]);
+    expect(exists(path.join(root, "src/shared/providers/$providerId.gen.tsx"))).toBe(false);
+    expect(readFile(sharedFile)).toBe(source);
   });
 });
