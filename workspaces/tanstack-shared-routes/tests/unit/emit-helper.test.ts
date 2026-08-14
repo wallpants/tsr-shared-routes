@@ -21,7 +21,7 @@ describe("renderHelper", () => {
   const spec = {
     mountIds: ["/inventory/providers/$providerId", "/finances/providers/$providerId"],
     sourceLabel: "src/shared/providers/$providerId.tsx",
-    runtimeSpecifier: "./__shared-routes.gen",
+    runtimeSpecifier: "../../sharedRoutes.gen",
     banner: DEFAULT_BANNER,
   };
 
@@ -38,8 +38,8 @@ describe("renderHelper", () => {
     );
     expect(content).toContain('"/inventory/providers/$providerId",');
     expect(content).toContain('"/finances/providers/$providerId",');
-    // all machinery lives in the package; the helper only instantiates it
-    expect(content).toContain('import { makeCreateSharedRoute } from "./__shared-routes.gen";');
+    // all machinery lives in the runtime module; the helper only instantiates it
+    expect(content).toContain('import { makeCreateSharedRoute } from "../../sharedRoutes.gen";');
     expect(content).toContain(
       "export const createSharedRoute = makeCreateSharedRoute<MountFilePaths>(",
     );

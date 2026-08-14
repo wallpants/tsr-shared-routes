@@ -2,7 +2,7 @@
 /* eslint-disable */
 // source: src/shared/providers/index.tsx
 // mounts: /finances/providers/, /inventory/providers/
-import { makeCreateSharedRoute } from "./__shared-routes.gen";
+import { makeCreateSharedRoute } from "../../sharedRoutes.gen";
 
 type MountFilePaths = "/finances/providers/" | "/inventory/providers/";
 

@@ -4,7 +4,11 @@
 
 Mount a shared directory of TanStack Router file-based route files at multiple paths. A small codegen companion. The stock TanStack Router / Start generator keeps doing all the real work, no patched packages. It solves the long-standing "reuse a subtree of file routes under several parents" problem ([TanStack/router#1108](https://github.com/TanStack/router/discussions/1108)): you write each route file once in a shared directory, declare where it mounts, and every mount gets real, fully typed routes in the generated route tree.
 
-This is not magic, it's just codegen to help you create the code you'd have to manually write otherwise to mount a route at different paths. If your editor autohides _.gitignored_ files, then you won't even notice the generated files.
+This is simply codegen to help you create the code you'd have to manually write otherwise to mount a route at different paths. If your editor autohides _.gitignored_ files, then you won't even notice the generated files.
+
+[Take a look at the example.](/workspaces/example/)
+
+I created this mostly because in some projects I have modals which I build as routes that can be mounted in a bunch of different places in my app.
 
 ## Quick start
 
@@ -62,7 +66,7 @@ import { createSharedRoute } from "./route.gen";
 export const shared = createSharedRoute({});
 ```
 
-The generator then also creates a `__shared-routes.gen.tsx` file _per shared directory_ and a `*.gen.tsx` _per route_ inside the shared directory.
+The generator then also creates a single `src/sharedRoutes.gen.ts` file (right next to TanStack's `routeTree.gen.ts`) and a `*.gen.tsx` _per route_ inside the shared directory.
 
 You'll also find a `providers` directory at `src/routes/inventory/providers/*` where your shared routes will be mounted.
 
@@ -156,7 +160,7 @@ Nothing else is "picked up": those two named exports are all the generated wrapp
 
 ```tsx
 // src/shared/providers/$providerId.gen.tsx  (GENERATED)
-import { makeCreateSharedRoute } from "./__shared-routes.gen";
+import { makeCreateSharedRoute } from "../../sharedRoutes.gen";
 
 type MountFilePaths = "/finances/providers/$providerId" | "/inventory/providers/$providerId";
 
@@ -166,7 +170,7 @@ export const createSharedRoute = makeCreateSharedRoute<MountFilePaths>(
 );
 ```
 
-The `makeCreateSharedRoute` machinery they share lives in `__shared-routes.gen.tsx`, generated once per shared directory. It is emitted **into your project** rather than imported from the package for the same reason the stock generator emits `routeTree.gen.ts` into your app: `routeTree.gen.ts` registers your route tree by augmenting `@tanstack/react-router` via `declare module`, and module augmentation binds to one resolved copy of that module — your app's.
+The `makeCreateSharedRoute` machinery they share lives in `sharedRoutes.gen.ts`, generated once next to your routes directory — a sibling of TanStack's `routeTree.gen.ts`. It is emitted **into your project** rather than imported from the package for the same reason the stock generator emits `routeTree.gen.ts` into your app: `routeTree.gen.ts` registers your route tree by augmenting `@tanstack/react-router` via `declare module`, and module augmentation binds to one resolved copy of that module — your app's.
 
 For every route file in a mounted shared directory, the plugin generates a tiny wrapper file at the mount location inside your routes tree (`src/routes/inventory/providers/$providerId.tsx` → `createFileRoute('/inventory/providers/$providerId')({ ...shared.options })`). The stock generator then scans those wrappers like any other route file and builds the route tree — routing, loaders, SSR, and typing all remain 100% stock.
 

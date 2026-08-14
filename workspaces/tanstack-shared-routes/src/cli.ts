@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -118,10 +119,18 @@ export function main(argv: Array<string>, io: CliIO = defaultIO): number {
   }
 }
 
-// Run when executed directly (the published `bin` entry).
-if (
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
-) {
+// Run when executed directly (the published `bin` entry). argv[1] is
+// realpathed because bin entries are symlinks, while node resolves the
+// main module to its real path.
+function isDirectRun(): boolean {
+  const argPath = process.argv[1];
+  if (argPath === undefined) return false;
+  try {
+    return import.meta.url === pathToFileURL(fs.realpathSync(path.resolve(argPath))).href;
+  } catch {
+    return false;
+  }
+}
+if (isDirectRun()) {
   process.exitCode = main(process.argv.slice(2));
 }

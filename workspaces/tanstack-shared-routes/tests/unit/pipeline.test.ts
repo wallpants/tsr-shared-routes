@@ -33,15 +33,12 @@ const WRAPPERS = [
 ];
 
 // `.gen.tsx` typed-helper siblings: route files only — the standalone
-// chart.lazy.tsx gets none. `__shared-routes.gen.tsx` is the per-shared-root
-// runtime module every helper imports.
-const HELPERS = [
-  "src/shared/providers/$providerId.gen.tsx",
-  "src/shared/providers/__shared-routes.gen.tsx",
-  "src/shared/providers/index.gen.tsx",
-];
+// chart.lazy.tsx gets none. `sharedRoutes.gen.ts` is the single runtime
+// module every helper imports, emitted next to the routes directory.
+const HELPERS = ["src/shared/providers/$providerId.gen.tsx", "src/shared/providers/index.gen.tsx"];
+const RUNTIME = "src/sharedRoutes.gen.ts";
 
-const GENERATED = [...WRAPPERS, ...HELPERS];
+const GENERATED = [...WRAPPERS, ...HELPERS, RUNTIME];
 
 describe("runPipeline", () => {
   it("writes all wrappers with correct literals, banner, and imports", () => {
@@ -74,9 +71,9 @@ describe("runPipeline", () => {
     expect(manifest!.files.map((f) => f.path).sort()).toEqual(GENERATED);
     expect(manifest!.dirs).toContain("src/routes/inventory/providers");
     expect(manifest!.dirs).not.toContain("src/shared/providers");
-    for (const helperPath of HELPERS) {
-      const role = manifest!.files.find((f) => f.path === helperPath)?.role;
-      expect(role).toBe(helperPath.includes("__shared-routes") ? "runtime" : "helper");
+    for (const genPath of [...HELPERS, RUNTIME]) {
+      const role = manifest!.files.find((f) => f.path === genPath)?.role;
+      expect(role).toBe(genPath === RUNTIME ? "runtime" : "helper");
     }
   });
 
@@ -280,6 +277,7 @@ describe("runPipeline", () => {
     expect(gitignore).toContain("src/routes/inventory/providers/");
     expect(gitignore).toContain("src/routes/finances/providers/");
     expect(gitignore).toContain("src/shared/providers/**/*.gen.*");
+    expect(gitignore).toContain("src/sharedRoutes.gen.ts");
 
     runPipeline(makeConfig(root, { gitignore: false }));
     expect(readFile(path.join(root, ".gitignore"))).not.toContain(GITIGNORE_BLOCK_START);

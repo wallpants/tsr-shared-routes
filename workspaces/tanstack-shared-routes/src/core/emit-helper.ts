@@ -4,9 +4,9 @@ import path from "node:path";
  * `.gen.tsx` typed-helper emission. For every shared ROUTE file (non-lazy) a
  * sibling `<base>.gen.tsx` is generated inside the shared dir, exposing the
  * typed `createSharedRoute` factory for that file. All type + runtime
- * machinery lives in the package (`makeCreateSharedRoute`); the generated
- * file contributes only what is file-specific — the union of this file's
- * route ids under EVERY mount of its shared dir.
+ * machinery lives in the generated runtime module (`makeCreateSharedRoute`);
+ * the helper contributes only what is file-specific — the union of this
+ * file's route ids under EVERY mount of its shared dir.
  */
 export interface HelperSpec {
   /**
@@ -17,7 +17,7 @@ export interface HelperSpec {
   mountIds: Array<string>;
   /** Shared source file shown in the header comment (root-relative, posix). */
   sourceLabel: string;
-  /** Relative import specifier of the shared root's `__shared-routes.gen` module. */
+  /** Relative import specifier of the project's `sharedRoutes.gen` runtime module. */
   runtimeSpecifier: string;
   /** First line(s) of the file; must start with the banner sentinel. */
   banner: string;

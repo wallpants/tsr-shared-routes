@@ -3,7 +3,7 @@ import path from "node:path";
 import type { SharedRoutesConfig } from "../config";
 import { discoverMounts } from "./discover";
 import { helperPathFor, renderHelper } from "./emit-helper";
-import { renderRuntimeModule, runtimeModulePathFor, runtimeSpecifierFor } from "./emit-runtime";
+import { renderRuntimeModule, runtimeModulePath, runtimeSpecifierFor } from "./emit-runtime";
 import { decideWrite, renderWrapper } from "./emit-wrapper";
 import { SharedRoutesError } from "./errors";
 import { atomicWrite, isOwned, maskedHash, readIfExists } from "./fsio";
@@ -71,6 +71,7 @@ export function runPipeline(
   const scaffold = !check;
   const root = config.root;
   const routesDir = path.resolve(root, config.routesDirectory);
+  const runtimePath = runtimeModulePath(routesDir);
   const manifestPath = path.resolve(root, config.manifestPath);
   const rel = (p: string): string => path.relative(root, p).split(path.sep).join("/");
 
@@ -131,20 +132,15 @@ export function runPipeline(
   //     wrapper's already-computed literal IS the mount id). Computed from the
   //     FULL plan, before the shared-export gate: the helper must exist even
   //     while its source file is still being authored.
-  const helperMountIds = new Map<string, { mountIds: Array<string>; sharedRoot: string }>();
+  const helperMountIds = new Map<string, Array<string>>();
   for (const { file, routeIdLiteral } of desired) {
     if (file.kind !== "wrapper") continue; // lazy shared files need no helper
-    const entry = helperMountIds.get(file.sharedFilePath) ?? {
-      mountIds: [],
-      sharedRoot: file.sharedRoot,
-    };
-    entry.mountIds.push(routeIdLiteral);
-    // A file can be scanned under nested shared roots; import from the nearest.
-    if (file.sharedRoot.length > entry.sharedRoot.length) entry.sharedRoot = file.sharedRoot;
-    helperMountIds.set(file.sharedFilePath, entry);
+    const mountIds = helperMountIds.get(file.sharedFilePath) ?? [];
+    mountIds.push(routeIdLiteral);
+    helperMountIds.set(file.sharedFilePath, mountIds);
   }
   const desiredHelpers = [...helperMountIds.entries()]
-    .map(([sharedFilePath, { mountIds, sharedRoot }]) => {
+    .map(([sharedFilePath, mountIds]) => {
       const helperPath = helperPathFor(sharedFilePath);
       return {
         helperPath,
@@ -152,23 +148,21 @@ export function runPipeline(
         content: renderHelper({
           mountIds,
           sourceLabel: rel(sharedFilePath),
-          runtimeSpecifier: runtimeSpecifierFor(helperPath, sharedRoot),
+          runtimeSpecifier: runtimeSpecifierFor(helperPath, runtimePath),
           banner: config.banner,
         }),
       };
     })
     .sort((a, b) => a.helperPath.localeCompare(b.helperPath));
 
-  // 4d. Runtime modules: one `__shared-routes.gen.tsx` per shared root, the
-  //     user-land home of the createSharedRoute machinery (module
-  //     augmentation of '@tanstack/react-router' binds to the app's copy —
-  //     see emit-runtime.ts).
-  const runtimeContent = renderRuntimeModule(config.banner);
-  const desiredRuntimes = plan.sharedRoots.map((sharedRoot) => ({
-    runtimePath: runtimeModulePathFor(sharedRoot),
-    sharedRoot,
-    content: runtimeContent,
-  }));
+  // 4d. Runtime module: a single `sharedRoutes.gen.ts` next to the routes
+  //     directory — the user-land home of the createSharedRoute machinery
+  //     (module augmentation of '@tanstack/react-router' binds to the app's
+  //     copy — see emit-runtime.ts). Present only while a mount exists.
+  const desiredRuntimes =
+    plan.sharedRoots.length > 0
+      ? [{ runtimePath, content: renderRuntimeModule(config.banner) }]
+      : [];
 
   // 4c. Shared-export gate: a wrapper imports `shared` (or `sharedLazy`) from
   //     its source file, so emitting it before that export exists would break
@@ -346,7 +340,6 @@ export function runPipeline(
       ...desiredRuntimes.map((runtime): ManifestFileEntry => ({
         path: rel(runtime.runtimePath),
         role: "runtime",
-        source: rel(runtime.sharedRoot),
         hash: maskedHash(runtime.content),
       })),
     ];
@@ -368,6 +361,7 @@ export function runPipeline(
     entries: [
       ...plan.targetDirs.map((dir) => `${rel(dir)}/`),
       ...plan.sharedRoots.map((dir) => `${rel(dir)}/**/*.gen.*`),
+      ...desiredRuntimes.map((runtime) => rel(runtime.runtimePath)),
     ],
     dryRun: check,
   });
