@@ -4,7 +4,9 @@ import type {
   FileBaseRouteOptions,
   FileRoutesByPath,
   Register,
+  ResolveLoaderData,
   ResolveParams,
+  ResolveValidatorOutput,
   RouteApi,
   UpdatableRouteOptions,
   UseNavigateResult,
@@ -37,6 +39,18 @@ type MountParent<TMountPaths extends string> = MountEntry<TMountPaths>["parentRo
 type MountId<TMountPaths extends string> = MountEntry<TMountPaths>["id"];
 type MountPath<TMountPaths extends string> = MountEntry<TMountPaths>["path"];
 type MountFullPath<TMountPaths extends string> = MountEntry<TMountPaths>["fullPath"];
+
+/**
+ * Pre-mount hook shape: typed purely from the file's own options. Used by the
+ * data hooks when TMountPaths is the wide `string` (the package placeholder —
+ * `.gen` helpers instantiate with literal unions, making `string extends
+ * TMountPaths` false). Own options can't see parent routes, so inherited
+ * search/params/context only appear once the first mount exists and the
+ * import is retargeted to the `.gen` helper.
+ */
+type PreMountHook<TValue> = <TSelected = TValue>(opts?: {
+  select?: (value: TValue) => TSelected;
+}) => TSelected;
 
 export type SharedRouteOptions<
   TMountPaths extends string,
@@ -117,10 +131,18 @@ export interface SharedRoute<
   };
   useMatch: RouteApi<MountId<TMountPaths>>["useMatch"];
   useRouteContext: RouteApi<MountId<TMountPaths>>["useRouteContext"];
-  useSearch: RouteApi<MountId<TMountPaths>>["useSearch"];
-  useParams: RouteApi<MountId<TMountPaths>>["useParams"];
-  useLoaderDeps: RouteApi<MountId<TMountPaths>>["useLoaderDeps"];
-  useLoaderData: RouteApi<MountId<TMountPaths>>["useLoaderData"];
+  useSearch: string extends TMountPaths
+    ? PreMountHook<ResolveValidatorOutput<TSearchValidator>>
+    : RouteApi<MountId<TMountPaths>>["useSearch"];
+  useParams: string extends TMountPaths
+    ? PreMountHook<TParams>
+    : RouteApi<MountId<TMountPaths>>["useParams"];
+  useLoaderDeps: string extends TMountPaths
+    ? PreMountHook<TLoaderDeps>
+    : RouteApi<MountId<TMountPaths>>["useLoaderDeps"];
+  useLoaderData: string extends TMountPaths
+    ? PreMountHook<ResolveLoaderData<TLoaderFn>>
+    : RouteApi<MountId<TMountPaths>>["useLoaderData"];
   useNavigate: () => UseNavigateResult<MountFullPath<TMountPaths>>;
   Link: RouteApi<MountId<TMountPaths>>["Link"];
 }

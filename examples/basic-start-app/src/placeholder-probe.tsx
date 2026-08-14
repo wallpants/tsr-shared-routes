@@ -23,3 +23,24 @@ export function Probe() {
 
   return okTab;
 }
+
+export function PreMountHookProbes() {
+  // data hooks are typed from the file's own options, no mount required
+  const data = shared.useLoaderData();
+  const echoed: "info" | "orders" = data.echoed;
+  // @ts-expect-error loader result has no such property
+  data.nope;
+
+  const search = shared.useSearch();
+  const tab: "info" | "orders" = search.tab;
+  // @ts-expect-error not part of the search schema
+  search.unknownKey;
+
+  const deps = shared.useLoaderDeps();
+  const depTab: "info" | "orders" = deps.tab;
+
+  // select is typed end-to-end
+  const upper: string = shared.useSearch({ select: (s) => s.tab.toUpperCase() });
+
+  return { echoed, tab, depTab, upper };
+}
