@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [
     // routeFileIgnorePattern is configured inline below (invisible to the
     // plugin's tsr.config.json probe), so the reminder warning is silenced.
-    sharedRoutes({ silenceIgnorePatternWarning: true }),
+    sharedRoutes({ silenceIgnorePatternWarning: true, gitignore: false }),
     tanstackStart({
       router: { routeFileIgnorePattern },
     }),
