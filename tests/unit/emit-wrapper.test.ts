@@ -9,7 +9,6 @@ const BASE = {
   sharedFilePath: "/proj/src/shared/providers/$providerId.tsx",
   sourceLabel: "src/shared/providers/$providerId.tsx",
   mountLabel: "src/routes/inventory/providers.mount.ts",
-  target: "react",
   banner: DEFAULT_BANNER,
 } as const;
 
@@ -88,12 +87,6 @@ import { sharedLazy } from '../../../shared/providers/chart.lazy'
 export const Route = createLazyFileRoute('/inventory/providers/chart')(sharedLazy)
 `,
     );
-  });
-
-  it("targets the solid router module when configured", () => {
-    const content = renderWrapper({ ...BASE, kind: "wrapper", target: "solid" });
-    expect(content).toContain("from '@tanstack/solid-router'");
-    expect(content).not.toContain("react-router");
   });
 });
 

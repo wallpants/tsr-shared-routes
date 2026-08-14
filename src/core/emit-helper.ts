@@ -3,10 +3,10 @@ import path from "node:path";
 /**
  * `.gen.tsx` typed-helper emission. For every shared ROUTE file (non-lazy) a
  * sibling `<base>.gen.tsx` is generated inside the shared dir, exposing the
- * typed `createSharedRoute` factory plus mount-aware runtime hooks. The
- * template is the one proven by the examples/basic-start-app spike,
- * parameterized by the set of mount route ids of THIS file under EVERY mount
- * of its shared dir.
+ * typed `createSharedRoute` factory for that file. All type + runtime
+ * machinery lives in the package (`makeCreateSharedRoute`); the generated
+ * file contributes only what is file-specific — the union of this file's
+ * route ids under EVERY mount of its shared dir.
  */
 export interface HelperSpec {
   /**
@@ -17,8 +17,6 @@ export interface HelperSpec {
   mountIds: Array<string>;
   /** Shared source file shown in the header comment (root-relative, posix). */
   sourceLabel: string;
-  /** Which router package the helper imports. */
-  target: "react" | "solid";
   /** First line(s) of the file; must start with the banner sentinel. */
   banner: string;
 }
@@ -32,7 +30,6 @@ export function helperPathFor(sharedFilePath: string): string {
 
 /** Renders the helper file content. */
 export function renderHelper(spec: HelperSpec): string {
-  const routerModule = `@tanstack/${spec.target}-router`;
   const mountIds = [...new Set(spec.mountIds)];
   const mountIdLines = mountIds.map((id) => `  ${JSON.stringify(id)},`).join("\n");
   const mountUnion = mountIds.map((id) => JSON.stringify(id)).join(" | ");
@@ -43,244 +40,15 @@ export function renderHelper(spec: HelperSpec): string {
 /* eslint-disable */
 // source: ${spec.sourceLabel}
 // mounts: ${mountIds.join(", ")}
-import type {
-  AnyContext,
-  AnyRoute,
-  FileBaseRouteOptions,
-  FileRoutesByPath,
-  Register,
-  ResolveParams,
-  RouteApi,
-  UpdatableRouteOptions,
-  UseNavigateResult,
-} from "${routerModule}";
-import { Link, useMatch, useNavigate, useRouter } from "${routerModule}";
-import * as React from "react";
+import { makeCreateSharedRoute } from "tanstack-shared-routes";
 
-const MOUNT_IDS: ReadonlySet<string> = new Set([
-${mountIdLines}
-]);
 type MountFilePaths = ${mountUnion};
 
-// Graceful degradation: resolves per-key, falls back before the wrappers /
-// routeTree.gen.ts exist so this file never hard-errors during scaffold.
-type EntryOf<K extends string> = K extends keyof FileRoutesByPath
-  ? FileRoutesByPath[K]
-  : {
-      id: K;
-      path: string;
-      fullPath: K;
-      parentRoute: AnyRoute;
-      preLoaderRoute: never;
-    };
-
-type MountEntry = EntryOf<MountFilePaths>;
-type MountParent = MountEntry["parentRoute"];
-type MountId = MountEntry["id"];
-type MountPath = MountEntry["path"];
-type MountFullPath = MountEntry["fullPath"];
-
-export type SharedRouteOptions<
-  TSearchValidator,
-  TParams,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  TLoaderDeps extends Record<string, any>,
-  TLoaderFn,
-  TSSR,
-  TMiddlewares,
-  THandlers,
-> = FileBaseRouteOptions<
-  Register,
-  MountParent,
-  MountId,
-  MountPath,
-  TSearchValidator,
-  TParams,
-  TLoaderDeps,
-  TLoaderFn,
-  AnyContext,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  AnyContext,
-  TSSR,
-  TMiddlewares,
-  THandlers
-> &
-  UpdatableRouteOptions<
-    MountParent,
-    MountId,
-    MountFullPath,
-    TParams,
-    TSearchValidator,
-    TLoaderFn,
-    TLoaderDeps,
-    AnyContext,
-    TRouteContextFn,
-    TBeforeLoadFn
-  >;
-
-export interface SharedRoute<
-  TSearchValidator,
-  TParams,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  TLoaderDeps extends Record<string, any>,
-  TLoaderFn,
-  TSSR,
-  TMiddlewares,
-  THandlers,
-> {
-  options: SharedRouteOptions<
-    TSearchValidator,
-    TParams,
-    TRouteContextFn,
-    TBeforeLoadFn,
-    TLoaderDeps,
-    TLoaderFn,
-    TSSR,
-    TMiddlewares,
-    THandlers
-  >;
-  /** Phantom generics consumed by the generated wrappers. Never materialized. */
-  "~types": {
-    searchValidator: TSearchValidator;
-    params: TParams;
-    routeContextFn: TRouteContextFn;
-    beforeLoadFn: TBeforeLoadFn;
-    loaderDeps: TLoaderDeps;
-    loaderFn: TLoaderFn;
-    ssr: TSSR;
-    middlewares: TMiddlewares;
-    handlers: THandlers;
-  };
-  useMatch: RouteApi<MountId>["useMatch"];
-  useRouteContext: RouteApi<MountId>["useRouteContext"];
-  useSearch: RouteApi<MountId>["useSearch"];
-  useParams: RouteApi<MountId>["useParams"];
-  useLoaderDeps: RouteApi<MountId>["useLoaderDeps"];
-  useLoaderData: RouteApi<MountId>["useLoaderData"];
-  useNavigate: () => UseNavigateResult<MountFullPath>;
-  Link: RouteApi<MountId>["Link"];
-}
-
-/**
- * Resolves which mount this component is currently rendered under: nearest
- * match, then a static walk up the route tree to the closest ancestor whose
- * id is a mount id — so hooks also work in components rendered by descendant
- * routes of the shared root.
- */
-function useMountRouteId(): string {
-  const nearestRouteId = useMatch({
-    strict: false,
-    select: (m) => m.routeId,
-  });
-  const router = useRouter();
-  let route: AnyRoute | undefined =
-    nearestRouteId === undefined ? undefined : (router.routesById as any)[nearestRouteId];
-  while (route && !MOUNT_IDS.has(route.id)) route = route.parentRoute;
-  if (!route) {
-    throw new Error(
-      'tanstack-shared-routes: hooks of ${JSON.stringify(errorPath)} ' +
-        "must be used under one of its mounts: " +
-        [...MOUNT_IDS].join(", "),
-    );
-  }
-  return route.id;
-}
-
-export function createSharedRoute<
-  TSearchValidator = undefined,
-  TParams = ResolveParams<MountPath>,
-  TRouteContextFn = AnyContext,
-  TBeforeLoadFn = AnyContext,
-  TLoaderDeps extends Record<string, any> = {},
-  TLoaderFn = undefined,
-  TSSR = unknown,
-  const TMiddlewares = unknown,
-  THandlers = undefined,
->(
-  options: SharedRouteOptions<
-    TSearchValidator,
-    TParams,
-    TRouteContextFn,
-    TBeforeLoadFn,
-    TLoaderDeps,
-    TLoaderFn,
-    TSSR,
-    TMiddlewares,
-    THandlers
-  >,
-): SharedRoute<
-  TSearchValidator,
-  TParams,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  TLoaderDeps,
-  TLoaderFn,
-  TSSR,
-  TMiddlewares,
-  THandlers
-> {
-  const useMountFullPath = () => {
-    const id = useMountRouteId();
-    const router = useRouter();
-    return (router.routesById as any)[id].fullPath;
-  };
-  return {
-    options,
-    useMatch: (opts?: any) => {
-      const from = useMountRouteId();
-      return useMatch({ ...opts, from } as any);
-    },
-    useRouteContext: (opts?: any) => {
-      const from = useMountRouteId();
-      return useMatch({
-        from,
-        select: (m: any) => (opts?.select ? opts.select(m.context) : m.context),
-      } as any);
-    },
-    useSearch: (opts?: any) => {
-      const from = useMountRouteId();
-      return useMatch({
-        ...opts,
-        from,
-        select: (m: any) => (opts?.select ? opts.select(m.search) : m.search),
-      } as any);
-    },
-    useParams: (opts?: any) => {
-      const from = useMountRouteId();
-      return useMatch({
-        ...opts,
-        from,
-        select: (m: any) => (opts?.select ? opts.select(m._strictParams) : m._strictParams),
-      } as any);
-    },
-    useLoaderDeps: (opts?: any) => {
-      const from = useMountRouteId();
-      return useMatch({
-        ...opts,
-        from,
-        select: (m: any) => (opts?.select ? opts.select(m.loaderDeps) : m.loaderDeps),
-      } as any);
-    },
-    useLoaderData: (opts?: any) => {
-      const from = useMountRouteId();
-      return useMatch({
-        ...opts,
-        from,
-        select: (m: any) => (opts?.select ? opts.select(m.loaderData) : m.loaderData),
-      } as any);
-    },
-    useNavigate: () => {
-      const fullPath = useMountFullPath();
-      return useNavigate({ from: fullPath });
-    },
-    Link: React.forwardRef(function SharedLink(props: any, ref: any) {
-      const fullPath = useMountFullPath();
-      return <Link ref={ref} from={fullPath} {...props} />;
-    }),
-  } as any;
-}
+export const createSharedRoute = makeCreateSharedRoute<MountFilePaths>(
+  [
+${mountIdLines}
+  ],
+  ${JSON.stringify(errorPath)},
+);
 `;
 }

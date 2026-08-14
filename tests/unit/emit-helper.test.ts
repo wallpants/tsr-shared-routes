@@ -21,13 +21,13 @@ describe("renderHelper", () => {
   const spec = {
     mountIds: ["/inventory/providers/$providerId", "/finances/providers/$providerId"],
     sourceLabel: "src/shared/providers/$providerId.tsx",
-    target: "react" as const,
     banner: DEFAULT_BANNER,
   };
 
   it("renders a 2-mount helper with the expected ids, banner, and comments", () => {
     const content = renderHelper(spec);
     expect(content.startsWith(`${DEFAULT_BANNER}\n`)).toBe(true);
+    expect(content).toContain("/* eslint-disable */");
     expect(content).toContain("// source: src/shared/providers/$providerId.tsx");
     expect(content).toContain(
       "// mounts: /inventory/providers/$providerId, /finances/providers/$providerId",
@@ -37,29 +37,13 @@ describe("renderHelper", () => {
     );
     expect(content).toContain('"/inventory/providers/$providerId",');
     expect(content).toContain('"/finances/providers/$providerId",');
-    // error message names the extensionless source path
+    // all machinery lives in the package; the helper only instantiates it
+    expect(content).toContain('import { makeCreateSharedRoute } from "tanstack-shared-routes";');
     expect(content).toContain(
-      "'tanstack-shared-routes: hooks of \"src/shared/providers/$providerId\" '",
+      "export const createSharedRoute = makeCreateSharedRoute<MountFilePaths>(",
     );
-    // the full hook surface is exposed
-    for (const hook of [
-      "useMatch",
-      "useRouteContext",
-      "useSearch",
-      "useParams",
-      "useLoaderDeps",
-      "useLoaderData",
-      "useNavigate",
-      "Link",
-    ]) {
-      expect(content).toContain(`${hook}:`);
-    }
-    // EntryOf fallback without an outer `K extends any` wrapper (breaks TS7)
-    expect(content).toContain("type EntryOf<K extends string> = K extends keyof FileRoutesByPath");
-    expect(content).not.toContain("K extends any");
-    // graceful nearest-match guard
-    expect(content).toContain("nearestRouteId === undefined ? undefined :");
-    expect(content).toContain('from "@tanstack/react-router"');
+    // error message names the extensionless source path
+    expect(content).toContain('"src/shared/providers/$providerId",');
   });
 
   it("renders a single-literal union for a single mount", () => {
@@ -74,12 +58,6 @@ describe("renderHelper", () => {
       mountIds: ["/inventory/providers/$providerId", "/inventory/providers/$providerId"],
     });
     expect(content).toContain('type MountFilePaths = "/inventory/providers/$providerId";');
-  });
-
-  it("imports from the solid router package when targeted", () => {
-    const content = renderHelper({ ...spec, target: "solid" });
-    expect(content).toContain('from "@tanstack/solid-router"');
-    expect(content).not.toContain('from "@tanstack/react-router"');
   });
 
   it("is deterministic (same spec, same bytes)", () => {

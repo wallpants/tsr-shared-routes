@@ -12,6 +12,8 @@
       "devDependencies": {
         "@tanstack/react-router": "^1.170.27",
         "@types/node": "^24.0.0",
+        "@types/react": "^19.2.18",
+        "react": "^19.2.8",
         "tsup": "^8.5.1",
         "typescript": "^7.0.2",
         "vite": "^7.0.0",

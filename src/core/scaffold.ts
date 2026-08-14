@@ -14,8 +14,8 @@ export function sharedRouteScaffold(sharedFilePath: string): string {
 }
 
 /** Boilerplate for byte-empty `.lazy` route files (no helper involved). */
-export function sharedLazyScaffold(target: "react" | "solid"): string {
-  return `import type { LazyRouteOptions } from '@tanstack/${target}-router'\n\nexport const sharedLazy = {} satisfies LazyRouteOptions\n`;
+export function sharedLazyScaffold(): string {
+  return `import type { LazyRouteOptions } from '@tanstack/react-router'\n\nexport const sharedLazy = {} satisfies LazyRouteOptions\n`;
 }
 
 /**

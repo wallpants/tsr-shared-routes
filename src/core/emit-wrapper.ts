@@ -13,8 +13,6 @@ export interface WrapperSpec {
   sourceLabel: string;
   /** Mount file path as shown in the source comment (root-relative, posix). */
   mountLabel: string;
-  /** Which router package to import from. */
-  target: "react" | "solid";
   /** First line(s) of the file; must start with the banner sentinel. */
   banner: string;
 }
@@ -39,7 +37,7 @@ export function computeImportPath(fromWrapperPath: string, toSharedFilePath: str
  * transformer preserves whatever style is on disk).
  */
 export function renderWrapper(spec: WrapperSpec): string {
-  const routerModule = `@tanstack/${spec.target}-router`;
+  const routerModule = "@tanstack/react-router";
   const importPath = computeImportPath(spec.targetPath, spec.sharedFilePath);
   const header = `${spec.banner}\n/* eslint-disable */\n// source: ${spec.sourceLabel} (mount: ${spec.mountLabel})\n`;
 

@@ -25,60 +25,24 @@ export interface MountDeclaration {
   [MOUNT_BRAND]: string;
 }
 
-/**
- * Placeholder shape returned by the package-level {@link createSharedRoute}.
- * Loosely typed on purpose: without a mount there is no route tree to type
- * against, so hooks return `unknown` and options are unconstrained.
- */
-export interface PlaceholderSharedRoute<TOptions> {
-  options: TOptions;
-  /** Phantom slot consumed by generated wrappers; never materialized. */
-  "~types": Record<string, unknown>;
-  useMatch: (options?: unknown) => unknown;
-  useRouteContext: (options?: unknown) => unknown;
-  useSearch: (options?: unknown) => unknown;
-  useParams: (options?: unknown) => unknown;
-  useLoaderDeps: (options?: unknown) => unknown;
-  useLoaderData: (options?: unknown) => unknown;
-  useNavigate: () => (options?: unknown) => unknown;
-  Link: (props?: unknown) => never;
-}
+export { makeCreateSharedRoute } from "./shared-route";
+export type { CreateSharedRoute, SharedRoute, SharedRouteOptions } from "./shared-route";
+import { makeCreateSharedRoute } from "./shared-route";
 
 /**
  * Placeholder factory for shared route files whose directory is not mounted
  * anywhere yet. It exists so authoring can start before the first mount —
  * `import { createSharedRoute } from 'tanstack-shared-routes'` always
- * resolves. Once a mount points at the directory, the codegen generates the
- * fully typed `<name>.gen.tsx` sibling and retargets this import to it (and
- * back, should the last mount disappear).
+ * resolves, with the same option typing the generated helpers provide. Once a
+ * mount points at the directory, the codegen generates the `<name>.gen.tsx`
+ * sibling and retargets this import to it (and back, should the last mount
+ * disappear).
  *
- * Loosely typed by design: params, search, loader data, and navigation can
- * only be typed against the generated route tree, which needs at least one
- * mount. Mount first when you want full types while authoring.
+ * Mount-dependent types (params from the path, mount-aware hooks and
+ * navigation) need the generated route tree, so they only tighten once the
+ * first mount exists. Mount first when you want full types while authoring.
  */
-export function createSharedRoute<TOptions extends object>(
-  options: TOptions,
-): PlaceholderSharedRoute<TOptions> {
-  const hook = (): never => {
-    throw new Error(
-      "tanstack-shared-routes: this shared route file is not mounted anywhere yet. " +
-        "Create a `*.mount.ts` file pointing at its directory — the codegen then " +
-        "generates a typed `.gen` helper and retargets this import to it.",
-    );
-  };
-  return {
-    options,
-    "~types": {},
-    useMatch: hook,
-    useRouteContext: hook,
-    useSearch: hook,
-    useParams: hook,
-    useLoaderDeps: hook,
-    useLoaderData: hook,
-    useNavigate: hook,
-    Link: hook,
-  };
-}
+export const createSharedRoute = makeCreateSharedRoute<string>([]);
 
 /**
  * The `routeFileIgnorePattern` that hides `*.mount.ts` files from the stock

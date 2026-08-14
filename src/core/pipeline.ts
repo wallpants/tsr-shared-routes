@@ -96,7 +96,7 @@ export function runPipeline(
       if (existing === undefined || existing.trim() !== "") continue;
       const content =
         file.kind === "wrapper-lazy"
-          ? sharedLazyScaffold(config.target)
+          ? sharedLazyScaffold()
           : sharedRouteScaffold(file.sharedFilePath);
       if (scaffoldIfEmpty(file.sharedFilePath, existing, content)) {
         sharedContent.set(file.sharedFilePath, content);
@@ -119,7 +119,6 @@ export function runPipeline(
       sharedFilePath: file.sharedFilePath,
       sourceLabel: rel(file.sharedFilePath),
       mountLabel: rel(file.mountFilePath),
-      target: config.target,
       banner: config.banner,
     });
     return { file, routeIdLiteral, content };
@@ -145,7 +144,6 @@ export function runPipeline(
       content: renderHelper({
         mountIds,
         sourceLabel: rel(sharedFilePath),
-        target: config.target,
         banner: config.banner,
       }),
     }))
