@@ -1,7 +1,7 @@
 {
   "name": "tanstack-shared-routes",
   "version": "0.0.0",
-  "description": "Mount a shared directory of TanStack Router file-based routes at multiple paths — companion codegen, no fork required",
+  "description": "Mount a shared directory of TanStack Router file-based routes at multiple paths \u2014 companion codegen, no fork required",
   "keywords": [
     "file-based-routing",
     "shared-routes",
@@ -38,7 +38,7 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -52,7 +52,7 @@
     "@tanstack/react-router": "^1.170.27",
     "@types/node": "^24.0.0",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.0",
+    "typescript": "^7.0.2",
     "vite": "^7.0.0",
     "vitest": "^4.1.10"
   },

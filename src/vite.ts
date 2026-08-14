@@ -18,8 +18,9 @@ export const IGNORE_PATTERN_WARNING = [
   "tanstack-shared-routes: could not verify that the TanStack Router generator ignores *.mount.* files.",
   "Without the ignore pattern every mount file produces a generator warning. Add it to your router config:",
   "",
-  "  tanstackStart({ router: { routeFileIgnorePattern: '\\\\.mount\\\\.(ts|js)$' } })",
-  "  // or: tanstackRouter({ routeFileIgnorePattern: '\\\\.mount\\\\.(ts|js)$' })",
+  "  import { routeFileIgnorePattern } from 'tanstack-shared-routes'",
+  "  tanstackStart({ router: { routeFileIgnorePattern } })",
+  "  // or: tanstackRouter({ routeFileIgnorePattern })",
   "",
   "Already configured inline? Set silenceIgnorePatternWarning: true in sharedRoutes() to hide this warning.",
 ].join("\n");

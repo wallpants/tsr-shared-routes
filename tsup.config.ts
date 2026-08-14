@@ -1,5 +1,8 @@
 import { defineConfig } from "tsup";
 
+// dts is NOT handled by tsup: its dts step needs the JS-based TypeScript
+// compiler API, which TypeScript 7 (native) does not provide. Declarations
+// are emitted by `tsc -p tsconfig.build.json` instead (see the build script).
 export default defineConfig([
   {
     entry: {
@@ -7,7 +10,6 @@ export default defineConfig([
       vite: "src/vite.ts",
     },
     format: ["esm", "cjs"],
-    dts: true,
     clean: true,
     sourcemap: true,
     target: "node18",
@@ -17,7 +19,6 @@ export default defineConfig([
     // and the bin entry points at dist/cli.js.
     entry: { cli: "src/cli.ts" },
     format: ["esm"],
-    dts: true,
     sourcemap: true,
     target: "node18",
   },

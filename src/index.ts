@@ -24,3 +24,14 @@ export const MOUNT_BRAND = Symbol.for("tanstack-shared-routes.mount");
 export interface MountDeclaration {
   [MOUNT_BRAND]: string;
 }
+
+/**
+ * The `routeFileIgnorePattern` that hides `*.mount.ts` files from the stock
+ * TanStack generator. Pass it through your router config so you never
+ * mistype the regex:
+ * ```ts
+ * import { routeFileIgnorePattern } from 'tanstack-shared-routes'
+ * tanstackStart({ router: { routeFileIgnorePattern } })
+ * ```
+ */
+export const routeFileIgnorePattern = "\\.mount\\.(ts|js)$";

@@ -1,5 +1,6 @@
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
+import { routeFileIgnorePattern } from "tanstack-shared-routes";
 import { sharedRoutes } from "tanstack-shared-routes/vite";
 import { defineConfig } from "vite";
 
@@ -10,9 +11,7 @@ export default defineConfig({
     // plugin's tsr.config.json probe), so the reminder warning is silenced.
     sharedRoutes({ silenceIgnorePatternWarning: true }),
     tanstackStart({
-      router: {
-        routeFileIgnorePattern: "\\.mount\\.(ts|js)$",
-      },
+      router: { routeFileIgnorePattern },
     }),
     viteReact(),
   ],
