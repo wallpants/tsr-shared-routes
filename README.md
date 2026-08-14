@@ -113,6 +113,43 @@ Prefer one-shot codegen? `npx tsr-shared-routes generate` runs the same pipeline
 
 `import { createSharedRoute } from "tsr-shared-routes"` always resolves — the package exports a placeholder factory, so you can sketch shared route files before any mount exists. It is the same implementation the `.gen` helpers use, instantiated with an empty mount set, and it types as much as is knowable without a route tree: option keys are checked, the `validateSearch` → `loaderDeps` → `loader` inference chains work, and the data hooks are typed from the file's own options — `useLoaderData()` returns your loader's type, `useSearch()` your schema's output, `useParams()` your `params.parse` result. What only appears after the first mount: params derived from the file's path, anything **inherited from parent routes** (their search schemas, params, context), and navigation targets — those live in the generated route tree. The moment a mount points at the directory, the codegen generates the `.gen` siblings and **retargets your imports to them automatically** (and back to the package, should the last mount disappear) — the same kind of in-place correction the stock generator applies to `createFileRoute` path literals when you move a file. Renaming or moving a shared file works the same way: the `.gen` sibling follows the file, and a now-stale `./oldName.gen` import is repointed at the new one.
 
+## Relative navigation semantics
+
+Within the shared subtree, relative navigation is strictly typed: `to: '.'`, `to: '..'`, `to: './$providerId'` resolve against the current mount, and typos or invalid search/params are compile errors.
+
+For JSX, use `shared.Link`: a `Link` pre-bound to the current mount. Like the hooks, it resolves which mount rendered the component at runtime and passes its path as `from`, so one relative target does the right thing under every mount:
+
+```tsx
+// src/routes/-providers/index.tsx
+import { createSharedRoute } from "./index.gen";
+
+export const shared = createSharedRoute({ loader: () => fetchProviders() });
+
+function ProviderList() {
+  const providers = shared.useLoaderData();
+  return (
+    <ul>
+      {providers.map((p) => (
+        <li key={p.id}>
+          {/* lands on /inventory/providers/$providerId or /finances/providers/$providerId,
+              depending on which mount rendered this component */}
+          <shared.Link to="./$providerId" params={{ providerId: p.id }}>
+            {p.name}
+          </shared.Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Two stock behaviors to know:
+
+- **Index routes**: escaping the subtree from an index route needs `'../..'` — one `'..'` only strips the index segment. This is stock TanStack semantics, unchanged.
+- **Escaping the subtree**: a relative target that leaves the shared subtree must be valid under **all** mounts, and it resolves to a different route per mount — union semantics. `navigate({ to: '../..' })` from `/inventory/providers/` and `/finances/providers/` lands on `/inventory` or `/finances` respectively, and typechecks only because both exist.
+
+Absolute paths into or out of mounts are simply stock-typed routes — they work from anywhere.
+
 ## `.lazy.tsx` route files
 
 Wrappers of non-lazy shared routes import the shared file directly, so their components are **not** auto code-split (the splitter can't see through the `{ ...shared.options }` spread). For heavy UI, use the stock `.lazy` split — it works end-to-end:
@@ -187,43 +224,6 @@ src/routes/inventory/
 ├── providers.mount.ts      # mount('./-shared/providers')
 └── providers/              # generated wrappers
 ```
-
-## Relative navigation semantics
-
-Within the shared subtree, relative navigation is strictly typed: `to: '.'`, `to: '..'`, `to: './$providerId'` resolve against the current mount, and typos or invalid search/params are compile errors.
-
-For JSX, use `shared.Link`: a `Link` pre-bound to the current mount. Like the hooks, it resolves which mount rendered the component at runtime and passes its path as `from`, so one relative target does the right thing under every mount:
-
-```tsx
-// src/routes/-providers/index.tsx
-import { createSharedRoute } from "./index.gen";
-
-export const shared = createSharedRoute({ loader: () => fetchProviders() });
-
-function ProviderList() {
-  const providers = shared.useLoaderData();
-  return (
-    <ul>
-      {providers.map((p) => (
-        <li key={p.id}>
-          {/* lands on /inventory/providers/$providerId or /finances/providers/$providerId,
-              depending on which mount rendered this component */}
-          <shared.Link to="./$providerId" params={{ providerId: p.id }}>
-            {p.name}
-          </shared.Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-Two stock behaviors to know:
-
-- **Index routes**: escaping the subtree from an index route needs `'../..'` — one `'..'` only strips the index segment. This is stock TanStack semantics, unchanged.
-- **Escaping the subtree**: a relative target that leaves the shared subtree must be valid under **all** mounts, and it resolves to a different route per mount — union semantics. `navigate({ to: '../..' })` from `/inventory/providers/` and `/finances/providers/` lands on `/inventory` or `/finances` respectively, and typechecks only because both exist.
-
-Absolute paths into or out of mounts are simply stock-typed routes — they work from anywhere.
 
 ## CLI
 
