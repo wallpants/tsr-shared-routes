@@ -53,7 +53,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-      id-token: write
+      # id-token: write # (OIDC) re-enable once the trusted publisher is configured on npmjs.com
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -73,4 +73,5 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bun run semantic-release
