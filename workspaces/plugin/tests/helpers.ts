@@ -8,44 +8,44 @@ import { resolveConfig } from "../src/config";
 const created: Array<string> = [];
 
 afterEach(() => {
-  while (created.length > 0) {
-    fs.rmSync(created.pop()!, { recursive: true, force: true });
-  }
+   while (created.length > 0) {
+      fs.rmSync(created.pop()!, { recursive: true, force: true });
+   }
 });
 
 /** Creates a temp dir (auto-removed after each test). Returns its realpath. */
 export function makeTmpDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tsr-shared-"));
-  created.push(dir);
-  // macOS: /var/folders → /private/var/folders; realpath keeps comparisons stable.
-  return fs.realpathSync(dir);
+   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tsr-shared-"));
+   created.push(dir);
+   // macOS: /var/folders → /private/var/folders; realpath keeps comparisons stable.
+   return fs.realpathSync(dir);
 }
 
 /** Writes a file tree: keys are posix-relative paths, values are contents. */
 export function writeTree(root: string, tree: Record<string, string>): void {
-  for (const [relPath, content] of Object.entries(tree)) {
-    const filePath = path.join(root, ...relPath.split("/"));
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, content, "utf8");
-  }
+   for (const [relPath, content] of Object.entries(tree)) {
+      const filePath = path.join(root, ...relPath.split("/"));
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      fs.writeFileSync(filePath, content, "utf8");
+   }
 }
 
 export function mountFileSource(sharedDirRelative: string): string {
-  return `import { mount } from 'tsr-shared-routes'\nexport default mount('${sharedDirRelative}')\n`;
+   return `import { mount } from 'tsr-shared-routes'\nexport default mount('${sharedDirRelative}')\n`;
 }
 
 export function makeConfig(
-  root: string,
-  overrides: SharedRoutesUserConfig = {},
+   root: string,
+   overrides: SharedRoutesUserConfig = {},
 ): SharedRoutesConfig {
-  return resolveConfig(overrides, root);
+   return resolveConfig(overrides, root);
 }
 
 /** Reads a file as utf8 (throws when missing). */
 export function readFile(filePath: string): string {
-  return fs.readFileSync(filePath, "utf8");
+   return fs.readFileSync(filePath, "utf8");
 }
 
 export function exists(filePath: string): boolean {
-  return fs.existsSync(filePath);
+   return fs.existsSync(filePath);
 }

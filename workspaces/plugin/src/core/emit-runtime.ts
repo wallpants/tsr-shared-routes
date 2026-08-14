@@ -18,22 +18,22 @@ export const RUNTIME_MODULE_BASENAME = "sharedRoutes.gen.ts";
 
 /** Absolute path of the runtime module: sibling of the routes directory. */
 export function runtimeModulePath(routesDirectory: string): string {
-  return path.join(path.dirname(routesDirectory), RUNTIME_MODULE_BASENAME);
+   return path.join(path.dirname(routesDirectory), RUNTIME_MODULE_BASENAME);
 }
 
 /** POSIX, extensionless specifier from a `.gen` helper to the runtime module. */
 export function runtimeSpecifierFor(helperPath: string, runtimePath: string): string {
-  const relative = path
-    .relative(path.dirname(helperPath), runtimePath)
-    .split(path.sep)
-    .join("/")
-    .replace(/\.ts$/, "");
-  return relative.startsWith(".") ? relative : `./${relative}`;
+   const relative = path
+      .relative(path.dirname(helperPath), runtimePath)
+      .split(path.sep)
+      .join("/")
+      .replace(/\.ts$/, "");
+   return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
 /** Renders the runtime module content. */
 export function renderRuntimeModule(banner: string): string {
-  return `${banner}
+   return `${banner}
 /* eslint-disable */
 // The createSharedRoute machinery shared by every .gen helper.
 // Generated into your project (not imported from the package) so its types

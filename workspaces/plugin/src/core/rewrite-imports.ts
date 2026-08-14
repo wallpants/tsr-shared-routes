@@ -1,5 +1,5 @@
-import { parseAst } from "@tanstack/router-utils";
 import path from "node:path";
+import { parseAst } from "@tanstack/router-utils";
 
 /** The package name the placeholder createSharedRoute is imported from. */
 const PACKAGE_NAME = "tsr-shared-routes";
@@ -17,8 +17,8 @@ const PACKAGE_NAME = "tsr-shared-routes";
 const RELATIVE_GEN_RE = /^\.\.?\/.*\.gen(\.(t|j)sx?)?$/;
 
 function helperSpecifier(sharedFilePath: string): string {
-  const base = path.basename(sharedFilePath).replace(/\.(tsx|ts|jsx|js)$/, "");
-  return `./${base}.gen`;
+   const base = path.basename(sharedFilePath).replace(/\.(tsx|ts|jsx|js)$/, "");
+   return `./${base}.gen`;
 }
 
 /**
@@ -29,34 +29,34 @@ function helperSpecifier(sharedFilePath: string): string {
  * import, parse failure, or the specifier already points at `toSource`).
  */
 function retargetImport(
-  code: string,
-  matchesSource: (source: string) => boolean,
-  toSource: string,
+   code: string,
+   matchesSource: (source: string) => boolean,
+   toSource: string,
 ): string | undefined {
-  let ast: ReturnType<typeof parseAst>;
-  try {
-    ast = parseAst({ code, filename: "shared-file.tsx" });
-  } catch {
-    return undefined; // mid-edit syntax error — leave the file alone
-  }
-  for (const statement of ast.program.body) {
-    if (statement.type !== "ImportDeclaration") continue;
-    const source = statement.source.value;
-    if (source === toSource || !matchesSource(source)) continue;
-    const hasFactory = statement.specifiers.some(
-      (specifier) =>
-        specifier.type === "ImportSpecifier" &&
-        (specifier.imported.type === "Identifier"
-          ? specifier.imported.name
-          : specifier.imported.value) === "createSharedRoute",
-    );
-    if (!hasFactory) continue;
-    const { start, end } = statement.source;
-    if (start == null || end == null) return undefined;
-    const quote = code[start] === '"' ? '"' : "'";
-    return `${code.slice(0, start)}${quote}${toSource}${quote}${code.slice(end)}`;
-  }
-  return undefined;
+   let ast: ReturnType<typeof parseAst>;
+   try {
+      ast = parseAst({ code, filename: "shared-file.tsx" });
+   } catch {
+      return undefined; // mid-edit syntax error — leave the file alone
+   }
+   for (const statement of ast.program.body) {
+      if (statement.type !== "ImportDeclaration") continue;
+      const source = statement.source.value;
+      if (source === toSource || !matchesSource(source)) continue;
+      const hasFactory = statement.specifiers.some(
+         (specifier) =>
+            specifier.type === "ImportSpecifier" &&
+            (specifier.imported.type === "Identifier"
+               ? specifier.imported.name
+               : specifier.imported.value) === "createSharedRoute",
+      );
+      if (!hasFactory) continue;
+      const { start, end } = statement.source;
+      if (start == null || end == null) return undefined;
+      const quote = code[start] === '"' ? '"' : "'";
+      return `${code.slice(0, start)}${quote}${toSource}${quote}${code.slice(end)}`;
+   }
+   return undefined;
 }
 
 /**
@@ -67,11 +67,11 @@ function retargetImport(
  * file-specific), so any non-own `.gen` specifier is safely retargeted.
  */
 export function rewriteToHelper(code: string, sharedFilePath: string): string | undefined {
-  return retargetImport(
-    code,
-    (source) => source === PACKAGE_NAME || RELATIVE_GEN_RE.test(source),
-    helperSpecifier(sharedFilePath),
-  );
+   return retargetImport(
+      code,
+      (source) => source === PACKAGE_NAME || RELATIVE_GEN_RE.test(source),
+      helperSpecifier(sharedFilePath),
+   );
 }
 
 /**
@@ -80,5 +80,5 @@ export function rewriteToHelper(code: string, sharedFilePath: string): string | 
  * never leave a red import behind. Undefined = no change needed.
  */
 export function rewriteToPackage(code: string): string | undefined {
-  return retargetImport(code, (source) => RELATIVE_GEN_RE.test(source), PACKAGE_NAME);
+   return retargetImport(code, (source) => RELATIVE_GEN_RE.test(source), PACKAGE_NAME);
 }

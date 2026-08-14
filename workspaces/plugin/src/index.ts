@@ -14,15 +14,15 @@
  * mounts `src/shared/providers/` at `/inventory/providers`.
  */
 export function mount(sharedDirectory: string): MountDeclaration {
-  // Runtime no-op: mount files are statically parsed by the plugin and are
-  // excluded from the app bundle via TanStack Router's routeFileIgnorePattern.
-  return { [MOUNT_BRAND]: sharedDirectory };
+   // Runtime no-op: mount files are statically parsed by the plugin and are
+   // excluded from the app bundle via TanStack Router's routeFileIgnorePattern.
+   return { [MOUNT_BRAND]: sharedDirectory };
 }
 
 export const MOUNT_BRAND = Symbol.for("tsr-shared-routes.mount");
 
 export interface MountDeclaration {
-  [MOUNT_BRAND]: string;
+   [MOUNT_BRAND]: string;
 }
 
 export { makeCreateSharedRoute } from "./shared-route";

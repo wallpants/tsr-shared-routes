@@ -7,5 +7,5 @@ import { createSharedRoute } from "./chart.gen";
  * code-split by the stock generator.
  */
 export const shared = createSharedRoute({
-  loader: () => fetchProviders(),
+   loader: () => fetchProviders(),
 });

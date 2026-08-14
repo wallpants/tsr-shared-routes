@@ -9,13 +9,13 @@ import path from "node:path";
  * — the wrapper can be emitted without ever passing through a broken state.
  */
 export function sharedRouteScaffold(sharedFilePath: string): string {
-  const base = path.basename(sharedFilePath).replace(/\.(tsx|ts|jsx|js)$/, "");
-  return `import { createSharedRoute } from './${base}.gen'\n\nexport const shared = createSharedRoute({})\n`;
+   const base = path.basename(sharedFilePath).replace(/\.(tsx|ts|jsx|js)$/, "");
+   return `import { createSharedRoute } from './${base}.gen'\n\nexport const shared = createSharedRoute({})\n`;
 }
 
 /** Boilerplate for byte-empty `.lazy` route files (no helper involved). */
 export function sharedLazyScaffold(): string {
-  return `import type { LazyRouteOptions } from '@tanstack/react-router'\n\nexport const sharedLazy = {} satisfies LazyRouteOptions\n`;
+   return `import type { LazyRouteOptions } from '@tanstack/react-router'\n\nexport const sharedLazy = {} satisfies LazyRouteOptions\n`;
 }
 
 /**
@@ -24,19 +24,19 @@ export function sharedLazyScaffold(): string {
  * content — scaffolding is strictly additive.
  */
 export function scaffoldIfEmpty(filePath: string, existing: string, content: string): boolean {
-  if (existing.trim() !== "") return false;
-  fs.writeFileSync(filePath, content, "utf8");
-  return true;
+   if (existing.trim() !== "") return false;
+   fs.writeFileSync(filePath, content, "utf8");
+   return true;
 }
 
 /** True when the file exports `shared` (const/let/var/function or export list). */
 export function hasSharedExport(code: string): boolean {
-  return exportsName(code, "shared");
+   return exportsName(code, "shared");
 }
 
 /** True when the file exports `sharedLazy`. */
 export function hasSharedLazyExport(code: string): boolean {
-  return exportsName(code, "sharedLazy");
+   return exportsName(code, "sharedLazy");
 }
 
 /**
@@ -46,16 +46,16 @@ export function hasSharedLazyExport(code: string): boolean {
  * and `export { ..., <name>, ... }` (aliased re-exports included).
  */
 function exportsName(code: string, name: string): boolean {
-  const direct = new RegExp(`\\bexport\\s+(?:const|let|var|function|class)\\s+${name}\\b`);
-  if (direct.test(code)) return true;
-  const listRe = /\bexport\s*\{([^}]*)\}/g;
-  for (let match = listRe.exec(code); match !== null; match = listRe.exec(code)) {
-    const entries = match[1]!.split(",");
-    for (const entry of entries) {
-      const parts = entry.split(/\s+as\s+/);
-      const exported = (parts[1] ?? parts[0] ?? "").trim();
-      if (exported === name) return true;
-    }
-  }
-  return false;
+   const direct = new RegExp(`\\bexport\\s+(?:const|let|var|function|class)\\s+${name}\\b`);
+   if (direct.test(code)) return true;
+   const listRe = /\bexport\s*\{([^}]*)\}/g;
+   for (let match = listRe.exec(code); match !== null; match = listRe.exec(code)) {
+      const entries = match[1]!.split(",");
+      for (const entry of entries) {
+         const parts = entry.split(/\s+as\s+/);
+         const exported = (parts[1] ?? parts[0] ?? "").trim();
+         if (exported === name) return true;
+      }
+   }
+   return false;
 }

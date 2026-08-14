@@ -1,15 +1,15 @@
 import type {
-  AnyContext,
-  AnyRoute,
-  FileBaseRouteOptions,
-  FileRoutesByPath,
-  Register,
-  ResolveLoaderData,
-  ResolveParams,
-  ResolveValidatorOutput,
-  RouteApi,
-  UpdatableRouteOptions,
-  UseNavigateResult,
+   AnyContext,
+   AnyRoute,
+   FileBaseRouteOptions,
+   FileRoutesByPath,
+   Register,
+   ResolveLoaderData,
+   ResolveParams,
+   ResolveValidatorOutput,
+   RouteApi,
+   UpdatableRouteOptions,
+   UseNavigateResult,
 } from "@tanstack/react-router";
 import { Link, useMatch, useNavigate, useRouter } from "@tanstack/react-router";
 import * as React from "react";
@@ -25,14 +25,14 @@ import * as React from "react";
 // Graceful degradation: resolves per-key, falls back before the wrappers /
 // routeTree.gen.ts exist so helpers never hard-error during scaffold.
 type EntryOf<K extends string> = K extends keyof FileRoutesByPath
-  ? FileRoutesByPath[K]
-  : {
-      id: K;
-      path: string;
-      fullPath: K;
-      parentRoute: AnyRoute;
-      preLoaderRoute: never;
-    };
+   ? FileRoutesByPath[K]
+   : {
+        id: K;
+        path: string;
+        fullPath: K;
+        parentRoute: AnyRoute;
+        preLoaderRoute: never;
+     };
 
 type MountEntry<TMountPaths extends string> = EntryOf<TMountPaths>;
 type MountParent<TMountPaths extends string> = MountEntry<TMountPaths>["parentRoute"];
@@ -49,118 +49,63 @@ type MountFullPath<TMountPaths extends string> = MountEntry<TMountPaths>["fullPa
  * import is retargeted to the `.gen` helper.
  */
 type PreMountHook<TValue> = <TSelected = TValue>(opts?: {
-  select?: (value: TValue) => TSelected;
+   select?: (value: TValue) => TSelected;
 }) => TSelected;
 
 export type SharedRouteOptions<
-  TMountPaths extends string,
-  TSearchValidator,
-  TParams,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  TLoaderDeps extends Record<string, any>,
-  TLoaderFn,
-  TSSR,
-  TMiddlewares,
-  THandlers,
+   TMountPaths extends string,
+   TSearchValidator,
+   TParams,
+   TRouteContextFn,
+   TBeforeLoadFn,
+   TLoaderDeps extends Record<string, any>,
+   TLoaderFn,
+   TSSR,
+   TMiddlewares,
+   THandlers,
 > = FileBaseRouteOptions<
-  Register,
-  MountParent<TMountPaths>,
-  MountId<TMountPaths>,
-  MountPath<TMountPaths>,
-  TSearchValidator,
-  TParams,
-  TLoaderDeps,
-  TLoaderFn,
-  AnyContext,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  AnyContext,
-  TSSR,
-  TMiddlewares,
-  THandlers
+   Register,
+   MountParent<TMountPaths>,
+   MountId<TMountPaths>,
+   MountPath<TMountPaths>,
+   TSearchValidator,
+   TParams,
+   TLoaderDeps,
+   TLoaderFn,
+   AnyContext,
+   TRouteContextFn,
+   TBeforeLoadFn,
+   AnyContext,
+   TSSR,
+   TMiddlewares,
+   THandlers
 > &
-  UpdatableRouteOptions<
-    MountParent<TMountPaths>,
-    MountId<TMountPaths>,
-    MountFullPath<TMountPaths>,
-    TParams,
-    TSearchValidator,
-    TLoaderFn,
-    TLoaderDeps,
-    AnyContext,
-    TRouteContextFn,
-    TBeforeLoadFn
-  >;
+   UpdatableRouteOptions<
+      MountParent<TMountPaths>,
+      MountId<TMountPaths>,
+      MountFullPath<TMountPaths>,
+      TParams,
+      TSearchValidator,
+      TLoaderFn,
+      TLoaderDeps,
+      AnyContext,
+      TRouteContextFn,
+      TBeforeLoadFn
+   >;
 
 export interface SharedRoute<
-  TMountPaths extends string,
-  TSearchValidator,
-  TParams,
-  TRouteContextFn,
-  TBeforeLoadFn,
-  TLoaderDeps extends Record<string, any>,
-  TLoaderFn,
-  TSSR,
-  TMiddlewares,
-  THandlers,
+   TMountPaths extends string,
+   TSearchValidator,
+   TParams,
+   TRouteContextFn,
+   TBeforeLoadFn,
+   TLoaderDeps extends Record<string, any>,
+   TLoaderFn,
+   TSSR,
+   TMiddlewares,
+   THandlers,
 > {
-  options: SharedRouteOptions<
-    TMountPaths,
-    TSearchValidator,
-    TParams,
-    TRouteContextFn,
-    TBeforeLoadFn,
-    TLoaderDeps,
-    TLoaderFn,
-    TSSR,
-    TMiddlewares,
-    THandlers
-  >;
-  /** Phantom generics consumed by the generated wrappers. Never materialized. */
-  "~types": {
-    searchValidator: TSearchValidator;
-    params: TParams;
-    routeContextFn: TRouteContextFn;
-    beforeLoadFn: TBeforeLoadFn;
-    loaderDeps: TLoaderDeps;
-    loaderFn: TLoaderFn;
-    ssr: TSSR;
-    middlewares: TMiddlewares;
-    handlers: THandlers;
-  };
-  useMatch: RouteApi<MountId<TMountPaths>>["useMatch"];
-  useRouteContext: RouteApi<MountId<TMountPaths>>["useRouteContext"];
-  useSearch: string extends TMountPaths
-    ? PreMountHook<ResolveValidatorOutput<TSearchValidator>>
-    : RouteApi<MountId<TMountPaths>>["useSearch"];
-  useParams: string extends TMountPaths
-    ? PreMountHook<TParams>
-    : RouteApi<MountId<TMountPaths>>["useParams"];
-  useLoaderDeps: string extends TMountPaths
-    ? PreMountHook<TLoaderDeps>
-    : RouteApi<MountId<TMountPaths>>["useLoaderDeps"];
-  useLoaderData: string extends TMountPaths
-    ? PreMountHook<ResolveLoaderData<TLoaderFn>>
-    : RouteApi<MountId<TMountPaths>>["useLoaderData"];
-  useNavigate: () => UseNavigateResult<MountFullPath<TMountPaths>>;
-  Link: RouteApi<MountId<TMountPaths>>["Link"];
-}
-
-/** The call signature of a per-file `createSharedRoute` factory. */
-export interface CreateSharedRoute<TMountPaths extends string> {
-  <
-    TSearchValidator = undefined,
-    TParams = ResolveParams<MountPath<TMountPaths>>,
-    TRouteContextFn = AnyContext,
-    TBeforeLoadFn = AnyContext,
-    TLoaderDeps extends Record<string, any> = {},
-    TLoaderFn = undefined,
-    TSSR = unknown,
-    const TMiddlewares = unknown,
-    THandlers = undefined,
-  >(
-    options: SharedRouteOptions<
+   options: SharedRouteOptions<
       TMountPaths,
       TSearchValidator,
       TParams,
@@ -171,19 +116,74 @@ export interface CreateSharedRoute<TMountPaths extends string> {
       TSSR,
       TMiddlewares,
       THandlers
-    >,
-  ): SharedRoute<
-    TMountPaths,
-    TSearchValidator,
-    TParams,
-    TRouteContextFn,
-    TBeforeLoadFn,
-    TLoaderDeps,
-    TLoaderFn,
-    TSSR,
-    TMiddlewares,
-    THandlers
-  >;
+   >;
+   /** Phantom generics consumed by the generated wrappers. Never materialized. */
+   "~types": {
+      searchValidator: TSearchValidator;
+      params: TParams;
+      routeContextFn: TRouteContextFn;
+      beforeLoadFn: TBeforeLoadFn;
+      loaderDeps: TLoaderDeps;
+      loaderFn: TLoaderFn;
+      ssr: TSSR;
+      middlewares: TMiddlewares;
+      handlers: THandlers;
+   };
+   useMatch: RouteApi<MountId<TMountPaths>>["useMatch"];
+   useRouteContext: RouteApi<MountId<TMountPaths>>["useRouteContext"];
+   useSearch: string extends TMountPaths
+      ? PreMountHook<ResolveValidatorOutput<TSearchValidator>>
+      : RouteApi<MountId<TMountPaths>>["useSearch"];
+   useParams: string extends TMountPaths
+      ? PreMountHook<TParams>
+      : RouteApi<MountId<TMountPaths>>["useParams"];
+   useLoaderDeps: string extends TMountPaths
+      ? PreMountHook<TLoaderDeps>
+      : RouteApi<MountId<TMountPaths>>["useLoaderDeps"];
+   useLoaderData: string extends TMountPaths
+      ? PreMountHook<ResolveLoaderData<TLoaderFn>>
+      : RouteApi<MountId<TMountPaths>>["useLoaderData"];
+   useNavigate: () => UseNavigateResult<MountFullPath<TMountPaths>>;
+   Link: RouteApi<MountId<TMountPaths>>["Link"];
+}
+
+/** The call signature of a per-file `createSharedRoute` factory. */
+export interface CreateSharedRoute<TMountPaths extends string> {
+   <
+      TSearchValidator = undefined,
+      TParams = ResolveParams<MountPath<TMountPaths>>,
+      TRouteContextFn = AnyContext,
+      TBeforeLoadFn = AnyContext,
+      TLoaderDeps extends Record<string, any> = {},
+      TLoaderFn = undefined,
+      TSSR = unknown,
+      const TMiddlewares = unknown,
+      THandlers = undefined,
+   >(
+      options: SharedRouteOptions<
+         TMountPaths,
+         TSearchValidator,
+         TParams,
+         TRouteContextFn,
+         TBeforeLoadFn,
+         TLoaderDeps,
+         TLoaderFn,
+         TSSR,
+         TMiddlewares,
+         THandlers
+      >,
+   ): SharedRoute<
+      TMountPaths,
+      TSearchValidator,
+      TParams,
+      TRouteContextFn,
+      TBeforeLoadFn,
+      TLoaderDeps,
+      TLoaderFn,
+      TSSR,
+      TMiddlewares,
+      THandlers
+   >;
 }
 
 /**
@@ -197,100 +197,100 @@ export interface CreateSharedRoute<TMountPaths extends string> {
  * rendered by descendant routes of the shared root.
  */
 export function makeCreateSharedRoute<TMountPaths extends string>(
-  mountIds: ReadonlyArray<string>,
-  sourcePath?: string,
+   mountIds: ReadonlyArray<string>,
+   sourcePath?: string,
 ): CreateSharedRoute<TMountPaths> {
-  const MOUNT_IDS: ReadonlySet<string> = new Set(mountIds);
-  const label = sourcePath === undefined ? "this shared route file" : JSON.stringify(sourcePath);
+   const MOUNT_IDS: ReadonlySet<string> = new Set(mountIds);
+   const label = sourcePath === undefined ? "this shared route file" : JSON.stringify(sourcePath);
 
-  const useMountRouteId = (): string => {
-    if (MOUNT_IDS.size === 0) {
-      // Thrown before any React hook runs so the message survives non-React
-      // call sites too (placeholder: the file is not mounted anywhere yet).
-      throw new Error(
-        `tsr-shared-routes: ${label} is not mounted anywhere yet. ` +
-          "Create a `*.mount.ts` file pointing at its directory — the codegen then " +
-          "generates a typed `.gen` helper and retargets this import to it.",
-      );
-    }
-    const nearestRouteId = useMatch({
-      strict: false,
-      select: (m) => m.routeId,
-    });
-    const router = useRouter();
-    let route: AnyRoute | undefined =
-      nearestRouteId === undefined ? undefined : (router.routesById as any)[nearestRouteId];
-    while (route && !MOUNT_IDS.has(route.id)) route = route.parentRoute;
-    if (!route) {
-      throw new Error(
-        `tsr-shared-routes: hooks of ${label} must be used under one of its mounts: ` +
-          [...MOUNT_IDS].join(", "),
-      );
-    }
-    return route.id;
-  };
+   const useMountRouteId = (): string => {
+      if (MOUNT_IDS.size === 0) {
+         // Thrown before any React hook runs so the message survives non-React
+         // call sites too (placeholder: the file is not mounted anywhere yet).
+         throw new Error(
+            `tsr-shared-routes: ${label} is not mounted anywhere yet. ` +
+               "Create a `*.mount.ts` file pointing at its directory — the codegen then " +
+               "generates a typed `.gen` helper and retargets this import to it.",
+         );
+      }
+      const nearestRouteId = useMatch({
+         strict: false,
+         select: (m) => m.routeId,
+      });
+      const router = useRouter();
+      let route: AnyRoute | undefined =
+         nearestRouteId === undefined ? undefined : (router.routesById as any)[nearestRouteId];
+      while (route && !MOUNT_IDS.has(route.id)) route = route.parentRoute;
+      if (!route) {
+         throw new Error(
+            `tsr-shared-routes: hooks of ${label} must be used under one of its mounts: ` +
+               [...MOUNT_IDS].join(", "),
+         );
+      }
+      return route.id;
+   };
 
-  const useMountFullPath = (): string => {
-    const id = useMountRouteId();
-    const router = useRouter();
-    return (router.routesById as any)[id].fullPath;
-  };
+   const useMountFullPath = (): string => {
+      const id = useMountRouteId();
+      const router = useRouter();
+      return (router.routesById as any)[id].fullPath;
+   };
 
-  return ((options: any) =>
-    ({
-      options,
-      useMatch: (opts?: any) => {
-        const from = useMountRouteId();
-        return useMatch({ ...opts, from } as any);
-      },
-      useRouteContext: (opts?: any) => {
-        const from = useMountRouteId();
-        return useMatch({
-          from,
-          select: (m: any) => (opts?.select ? opts.select(m.context) : m.context),
-        } as any);
-      },
-      useSearch: (opts?: any) => {
-        const from = useMountRouteId();
-        return useMatch({
-          ...opts,
-          from,
-          select: (m: any) => (opts?.select ? opts.select(m.search) : m.search),
-        } as any);
-      },
-      useParams: (opts?: any) => {
-        const from = useMountRouteId();
-        return useMatch({
-          ...opts,
-          from,
-          select: (m: any) => (opts?.select ? opts.select(m._strictParams) : m._strictParams),
-        } as any);
-      },
-      useLoaderDeps: (opts?: any) => {
-        const from = useMountRouteId();
-        return useMatch({
-          ...opts,
-          from,
-          select: (m: any) => (opts?.select ? opts.select(m.loaderDeps) : m.loaderDeps),
-        } as any);
-      },
-      useLoaderData: (opts?: any) => {
-        const from = useMountRouteId();
-        return useMatch({
-          ...opts,
-          from,
-          select: (m: any) => (opts?.select ? opts.select(m.loaderData) : m.loaderData),
-        } as any);
-      },
-      useNavigate: () => {
-        const fullPath = useMountFullPath();
-        // `from` is a live mount path; the registered router's literal union
-        // for it only exists in user-land compilations.
-        return useNavigate({ from: fullPath as any });
-      },
-      Link: React.forwardRef(function SharedLink(props: any, ref: any) {
-        const fullPath = useMountFullPath();
-        return React.createElement(Link, { ref, from: fullPath, ...props });
-      }),
-    }) as any) as CreateSharedRoute<TMountPaths>;
+   return ((options: any) =>
+      ({
+         options,
+         useMatch: (opts?: any) => {
+            const from = useMountRouteId();
+            return useMatch({ ...opts, from } as any);
+         },
+         useRouteContext: (opts?: any) => {
+            const from = useMountRouteId();
+            return useMatch({
+               from,
+               select: (m: any) => (opts?.select ? opts.select(m.context) : m.context),
+            } as any);
+         },
+         useSearch: (opts?: any) => {
+            const from = useMountRouteId();
+            return useMatch({
+               ...opts,
+               from,
+               select: (m: any) => (opts?.select ? opts.select(m.search) : m.search),
+            } as any);
+         },
+         useParams: (opts?: any) => {
+            const from = useMountRouteId();
+            return useMatch({
+               ...opts,
+               from,
+               select: (m: any) => (opts?.select ? opts.select(m._strictParams) : m._strictParams),
+            } as any);
+         },
+         useLoaderDeps: (opts?: any) => {
+            const from = useMountRouteId();
+            return useMatch({
+               ...opts,
+               from,
+               select: (m: any) => (opts?.select ? opts.select(m.loaderDeps) : m.loaderDeps),
+            } as any);
+         },
+         useLoaderData: (opts?: any) => {
+            const from = useMountRouteId();
+            return useMatch({
+               ...opts,
+               from,
+               select: (m: any) => (opts?.select ? opts.select(m.loaderData) : m.loaderData),
+            } as any);
+         },
+         useNavigate: () => {
+            const fullPath = useMountFullPath();
+            // `from` is a live mount path; the registered router's literal union
+            // for it only exists in user-land compilations.
+            return useNavigate({ from: fullPath as any });
+         },
+         Link: React.forwardRef(function SharedLink(props: any, ref: any) {
+            const fullPath = useMountFullPath();
+            return React.createElement(Link, { ref, from: fullPath, ...props });
+         }),
+      }) as any) as CreateSharedRoute<TMountPaths>;
 }

@@ -7,15 +7,15 @@ import { sharedRoutes } from "tsr-shared-routes/vite";
 import { defineConfig } from "vite";
 
 const config = defineConfig({
-  resolve: { tsconfigPaths: true },
-  plugins: [
-    devtools(),
-    nitro({ rollupConfig: { external: [/^@sentry\//] } }),
-    tailwindcss(),
-    sharedRoutes(),
-    tanstackStart(),
-    viteReact(),
-  ],
+   resolve: { tsconfigPaths: true },
+   plugins: [
+      devtools(),
+      nitro({ rollupConfig: { external: [/^@sentry\//] } }),
+      tailwindcss(),
+      sharedRoutes(),
+      tanstackStart(),
+      viteReact(),
+   ],
 });
 
 export default config;
