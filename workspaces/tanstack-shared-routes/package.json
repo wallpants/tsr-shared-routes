@@ -14,9 +14,6 @@
   "bin": {
     "tanstack-shared-routes": "./dist/cli.js"
   },
-  "workspaces": [
-    "examples/*"
-  ],
   "files": [
     "dist"
   ],
@@ -40,7 +37,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build && bun run test"
+    "prepublishOnly": "bun run build && bun run test && cp ../../README.md ./README.md",
+    "postpublish": "git checkout -- README.md"
   },
   "dependencies": {
     "@tanstack/router-generator": "^1.167.28",

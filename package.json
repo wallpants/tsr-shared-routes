@@ -6,8 +6,8 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "bun run --filter tanstack-shared-routes build",
-    "test": "bun run --filter tanstack-shared-routes test",
-    "typecheck": "bun run --filter '*' typecheck"
+    "build": "bun run --cwd workspaces/tanstack-shared-routes build",
+    "test": "bun run --cwd workspaces/tanstack-shared-routes test",
+    "typecheck": "bun run --cwd workspaces/tanstack-shared-routes typecheck && bun run --cwd workspaces/basic-start-app typecheck"
   }
 }
