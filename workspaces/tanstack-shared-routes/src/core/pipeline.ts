@@ -20,6 +20,7 @@ import {
   sharedLazyScaffold,
   sharedRouteScaffold,
 } from "./scaffold";
+import { TSR_CONFIG_FILE, ensureTsrConfig } from "./tsr-config";
 
 export interface PipelineSummary {
   /** Root-relative posix paths written (or that would be written in check mode). */
@@ -297,7 +298,7 @@ export function runPipeline(
         const sourcePath = `${base}${ext}`;
         const code = readIfExists(sourcePath);
         if (code === undefined) continue;
-        const next = rewriteToPackage(code, sourcePath);
+        const next = rewriteToPackage(code);
         if (next !== undefined) {
           fs.writeFileSync(sourcePath, next, "utf8");
           rewritten.push(rel(sourcePath));
@@ -365,6 +366,16 @@ export function runPipeline(
     ],
     dryRun: check,
   });
+
+  // 10. tsr.config.json: while any mount file exists, its
+  //     routeFileIgnorePattern must cover *.mount.ts files — that file is
+  //     read by both the tsr CLI and TanStack's vite plugin, so this is the
+  //     one place the pattern needs to live.
+  if (discovery.mounts.length > 0 || discovery.skipped.length > 0) {
+    const tsrUpdate = ensureTsrConfig(root, check);
+    if (tsrUpdate.changed) written.push(TSR_CONFIG_FILE);
+    if (tsrUpdate.warning !== undefined) warnings.push(tsrUpdate.warning);
+  }
 
   written.sort();
   adopted.sort();

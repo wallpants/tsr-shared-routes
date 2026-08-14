@@ -34,7 +34,8 @@ describe("cli main", () => {
     expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(true);
     expect(io.logs).toContain("wrote src/routes/inventory/providers/$providerId.tsx");
     expect(io.logs).toContain("wrote src/shared/providers/$providerId.gen.tsx");
-    expect(io.logs.at(-1)).toBe("done: 5 written, 0 deleted, 0 unchanged");
+    expect(io.logs).toContain("wrote tsr.config.json");
+    expect(io.logs.at(-1)).toBe("done: 6 written, 0 deleted, 0 unchanged");
   });
 
   it("--check on a dirty project prints would-be changes and exits 1 without writing", () => {

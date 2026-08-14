@@ -44,7 +44,7 @@ describe("runPipeline", () => {
   it("writes all wrappers with correct literals, banner, and imports", () => {
     const root = makeFixture();
     const summary = runPipeline(makeConfig(root));
-    expect(summary.written).toEqual(GENERATED);
+    expect(summary.written).toEqual([...GENERATED, "tsr.config.json"]);
     expect(summary.adopted).toEqual([]);
     expect(summary.deleted).toEqual([]);
     expect(summary.unchanged).toBe(0);
@@ -222,8 +222,8 @@ describe("runPipeline", () => {
   it("check mode reports pending work without touching the filesystem", () => {
     const root = makeFixture();
     const summary = checkPipeline(makeConfig(root));
-    expect(summary.written).toEqual(GENERATED);
-    for (const file of GENERATED) {
+    expect(summary.written).toEqual([...GENERATED, "tsr.config.json"]);
+    for (const file of [...GENERATED, "tsr.config.json"]) {
       expect(exists(path.join(root, file))).toBe(false);
     }
     expect(exists(path.join(root, ".tanstack"))).toBe(false);
@@ -308,6 +308,7 @@ describe("runPipeline", () => {
     const root = makeTmpDir();
     writeTree(root, { "src/routes/index.tsx": "export {}\n" });
     const summary = runPipeline(makeConfig(root));
+    expect(exists(path.join(root, "tsr.config.json"))).toBe(false);
     expect(summary).toEqual({
       written: [],
       adopted: [],
@@ -477,5 +478,73 @@ describe("runPipeline mid-edit DX", () => {
     expect(unmounted.rewritten).toEqual(["src/shared/providers/$providerId.tsx"]);
     expect(exists(path.join(root, "src/shared/providers/$providerId.gen.tsx"))).toBe(false);
     expect(readFile(sharedFile)).toBe(source);
+  });
+
+  it("follows a rename: helper moves and the stale .gen import is retargeted", () => {
+    const root = makeTmpDir();
+    writeTree(root, {
+      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
+      "src/shared/providers/chart.tsx":
+        "import { createSharedRoute } from './chart.gen'\n\nexport const shared = createSharedRoute({})\n",
+    });
+    runPipeline(makeConfig(root));
+
+    fs.renameSync(
+      path.join(root, "src/shared/providers/chart.tsx"),
+      path.join(root, "src/shared/providers/graph.tsx"),
+    );
+    const summary = runPipeline(makeConfig(root));
+    expect(summary.rewritten).toEqual(["src/shared/providers/graph.tsx"]);
+    expect(readFile(path.join(root, "src/shared/providers/graph.tsx"))).toContain(
+      "from './graph.gen'",
+    );
+    expect(exists(path.join(root, "src/shared/providers/graph.gen.tsx"))).toBe(true);
+    expect(summary.deleted).toContain("src/shared/providers/chart.gen.tsx");
+    expect(summary.deleted).toContain("src/routes/inventory/providers/chart.tsx");
+  });
+});
+
+describe("runPipeline tsr.config.json management", () => {
+  it("creates tsr.config.json with the mount ignore pattern, idempotently", () => {
+    const root = makeFixture();
+    const summary = runPipeline(makeConfig(root));
+    expect(summary.written).toContain("tsr.config.json");
+    expect(JSON.parse(readFile(path.join(root, "tsr.config.json")))).toEqual({
+      routeFileIgnorePattern: "\\.mount\\.(ts|js)$",
+    });
+    expect(runPipeline(makeConfig(root)).written).toEqual([]);
+  });
+
+  it("extends an existing pattern by alternation, preserving other keys", () => {
+    const root = makeFixture();
+    writeTree(root, {
+      "tsr.config.json": JSON.stringify({ target: "react", routeFileIgnorePattern: "\\.test\\." }),
+    });
+    runPipeline(makeConfig(root));
+    const config = JSON.parse(readFile(path.join(root, "tsr.config.json")));
+    expect(config.target).toBe("react");
+    const pattern = new RegExp(config.routeFileIgnorePattern as string);
+    expect(pattern.test("x.mount.ts")).toBe(true);
+    expect(pattern.test("x.test.ts")).toBe(true);
+    expect(pattern.test("x.tsx")).toBe(false);
+    // idempotent: the merged pattern already covers mount files
+    expect(runPipeline(makeConfig(root)).written).toEqual([]);
+  });
+
+  it("leaves an already-covering pattern untouched", () => {
+    const root = makeFixture();
+    const content = `${JSON.stringify({ routeFileIgnorePattern: "\\.mount\\." }, null, 2)}\n`;
+    writeTree(root, { "tsr.config.json": content });
+    const summary = runPipeline(makeConfig(root));
+    expect(summary.written).not.toContain("tsr.config.json");
+    expect(readFile(path.join(root, "tsr.config.json"))).toBe(content);
+  });
+
+  it("warns instead of touching an unparsable tsr.config.json", () => {
+    const root = makeFixture();
+    writeTree(root, { "tsr.config.json": "{ not json" });
+    const summary = runPipeline(makeConfig(root));
+    expect(summary.errors.some((w) => w.includes("tsr.config.json"))).toBe(true);
+    expect(readFile(path.join(root, "tsr.config.json"))).toBe("{ not json");
   });
 });

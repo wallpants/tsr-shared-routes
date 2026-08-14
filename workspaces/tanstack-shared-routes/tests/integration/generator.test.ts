@@ -77,12 +77,13 @@ const RUNTIME = "src/sharedRoutes.gen.ts";
 const GENERATED = [...WRAPPERS, ...HELPERS, RUNTIME];
 
 async function runGenerator(root: string): Promise<void> {
+  // No inline routeFileIgnorePattern: the pipeline maintains it in
+  // tsr.config.json, which getConfig merges in — exercised here.
   const config = getConfig(
     {
       target: "react",
       routesDirectory: "./src/routes",
       generatedRouteTree: "./src/routeTree.gen.ts",
-      routeFileIgnorePattern: "\\.mount\\.(ts|js)$",
       disableLogging: true,
     },
     root,
@@ -110,7 +111,7 @@ describe("pipeline + real Generator", () => {
 
     // 1. Pipeline writes exactly the expected wrapper + helper set.
     const summary = runPipeline(makeConfig(root));
-    expect(summary.written).toEqual(GENERATED);
+    expect(summary.written).toEqual([...GENERATED, "tsr.config.json"]);
     expect(summary.deleted).toEqual([]);
     expect(summary.errors).toEqual([]);
     for (const helper of HELPERS) {
@@ -262,6 +263,7 @@ describe("pipeline + real Generator", () => {
       "src/routes/inventory/providers/$providerId.tsx",
       "src/routes/inventory/providers/index.tsx",
       "src/sharedRoutes.gen.ts",
+      "tsr.config.json",
     ]);
 
     const wrappers = summary.written;

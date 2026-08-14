@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import type { Plugin } from "vite";
@@ -13,37 +12,6 @@ export type { SharedRoutesUserConfig } from "./config";
 
 /** Debounce window for watcher-triggered pipeline re-runs. */
 const RERUN_DEBOUNCE_MS = 50;
-
-export const IGNORE_PATTERN_WARNING = [
-  "tanstack-shared-routes: could not verify that the TanStack Router generator ignores *.mount.* files.",
-  "Without the ignore pattern every mount file produces a generator warning. Add it to your router config:",
-  "",
-  "  import { routeFileIgnorePattern } from 'tanstack-shared-routes'",
-  "  tanstackStart({ router: { routeFileIgnorePattern } })",
-  "  // or: tanstackRouter({ routeFileIgnorePattern })",
-  "",
-  "Configured it somewhere else? Set silenceIgnorePatternWarning: true in sharedRoutes() to hide this warning.",
-].join("\n");
-
-/**
- * Best-effort detection of a `routeFileIgnorePattern` covering mount files.
- * The pattern is passed inline to TanStack's Vite plugin, whose resolved
- * options live in a closure we cannot read at runtime — so we scan the Vite
- * config source for the option name instead, hence warning (never erroring)
- * and the `silenceIgnorePatternWarning` escape hatch.
- */
-export function detectIgnorePatternWarning(configFile: string | undefined): string | undefined {
-  if (configFile !== undefined) {
-    try {
-      if (fs.readFileSync(configFile, "utf8").includes("routeFileIgnorePattern")) {
-        return undefined;
-      }
-    } catch {
-      // Unreadable config file — warn below.
-    }
-  }
-  return IGNORE_PATTERN_WARNING;
-}
 
 /** True when `child` is inside (or equal to) `parent`. Both absolute. */
 function isWithin(parent: string, child: string): boolean {
@@ -69,7 +37,6 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
   let routesDir = "";
   let sharedRoots: Array<string> = [];
   let targetDirs: Array<string> = [];
-  let warned = false;
   let pendingWarnings: Array<string> = [];
 
   const applySummary = (
@@ -100,10 +67,6 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
     configResolved(viteConfig) {
       for (const line of pendingWarnings) viteConfig.logger.warn(line);
       pendingWarnings = [];
-      if (warned || resolved?.silenceIgnorePatternWarning !== false) return;
-      warned = true;
-      const warning = detectIgnorePatternWarning(viteConfig.configFile);
-      if (warning !== undefined) viteConfig.logger.warn(warning);
     },
 
     configureServer(server) {

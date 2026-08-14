@@ -43,14 +43,3 @@ import { makeCreateSharedRoute } from "./shared-route";
  * first mount exists. Mount first when you want full types while authoring.
  */
 export const createSharedRoute = makeCreateSharedRoute<string>([]);
-
-/**
- * The `routeFileIgnorePattern` that hides `*.mount.ts` files from the stock
- * TanStack generator. Pass it through your router config so you never
- * mistype the regex:
- * ```ts
- * import { routeFileIgnorePattern } from 'tanstack-shared-routes'
- * tanstackStart({ router: { routeFileIgnorePattern } })
- * ```
- */
-export const routeFileIgnorePattern = "\\.mount\\.(ts|js)$";

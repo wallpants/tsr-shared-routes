@@ -16,12 +16,13 @@ const exitCode = sharedRoutesCli(["generate", "--root", root]);
 if (exitCode !== 0) process.exit(exitCode);
 
 // 2. Stock generator: route tree from the routes dir (wrappers included).
+//    routeFileIgnorePattern comes from tsr.config.json, maintained by the
+//    pipeline above; getConfig merges that file in.
 const config = getConfig(
   {
     target: "react",
     routesDirectory: "./src/routes",
     generatedRouteTree: "./src/routeTree.gen.ts",
-    routeFileIgnorePattern: "\\.mount\\.(ts|js)$",
     autoCodeSplitting: true,
   },
   root,

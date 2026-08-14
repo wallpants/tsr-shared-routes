@@ -32,8 +32,6 @@ export const configSchema = z.object({
   routeToken: z.string().default("route"),
   /** Manifest location, relative to project root. */
   manifestPath: z.string().default(".tanstack/shared-routes/manifest.json"),
-  /** Silence the warning about a missing routeFileIgnorePattern for mount files. */
-  silenceIgnorePatternWarning: z.boolean().default(false),
 });
 
 export type SharedRoutesUserConfig = z.input<typeof configSchema>;

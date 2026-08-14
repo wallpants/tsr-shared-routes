@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { describe, expect, it, vi } from "vitest";
-import { IGNORE_PATTERN_WARNING, sharedRoutes } from "../../src/vite";
+import { sharedRoutes } from "../../src/vite";
 import { exists, makeTmpDir, mountFileSource, readFile, writeTree } from "../helpers";
 
 function makeFixture(): string {
@@ -23,15 +23,6 @@ function callConfig(plugin: Plugin, root: string): Promise<unknown> {
   return Promise.resolve(
     hook.call(undefined as never, { root }, { command: "serve", mode: "development" } as never),
   );
-}
-
-function callConfigResolved(
-  plugin: Plugin,
-  logger: { warn: (msg: string) => void },
-  configFile?: string,
-): void {
-  const hook = plugin.configResolved as Handler<Plugin["configResolved"]>;
-  hook.call(undefined as never, { logger, configFile } as never);
 }
 
 interface FakeServer {
@@ -93,52 +84,12 @@ describe("sharedRoutes vite plugin", () => {
     expect(exists(path.join(root, "src/routes/finances/providers/$providerId.tsx"))).toBe(true);
   });
 
-  it("warns once about a missing routeFileIgnorePattern via the vite logger", async () => {
+  it("maintains tsr.config.json from the config hook", async () => {
     const root = makeFixture();
-    const plugin = sharedRoutes();
-    await callConfig(plugin, root);
-    const warn = vi.fn();
-    callConfigResolved(plugin, { warn });
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn).toHaveBeenCalledWith(IGNORE_PATTERN_WARNING);
-    // A second configResolved (or hot restart of the hook) never re-warns.
-    callConfigResolved(plugin, { warn });
-    expect(warn).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not warn when the vite config file mentions routeFileIgnorePattern", async () => {
-    const root = makeFixture();
-    writeTree(root, {
-      "vite.config.ts":
-        "import { routeFileIgnorePattern } from 'tanstack-shared-routes'\n" +
-        "export default { plugins: [tanstackStart({ router: { routeFileIgnorePattern } })] }\n",
+    await callConfig(sharedRoutes(), root);
+    expect(JSON.parse(readFile(path.join(root, "tsr.config.json")))).toEqual({
+      routeFileIgnorePattern: "\\.mount\\.(ts|js)$",
     });
-    const plugin = sharedRoutes();
-    await callConfig(plugin, root);
-    const warn = vi.fn();
-    callConfigResolved(plugin, { warn }, path.join(root, "vite.config.ts"));
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it("warns when the vite config file does not mention routeFileIgnorePattern", async () => {
-    const root = makeFixture();
-    writeTree(root, {
-      "vite.config.ts": "export default { plugins: [tanstackStart()] }\n",
-    });
-    const plugin = sharedRoutes();
-    await callConfig(plugin, root);
-    const warn = vi.fn();
-    callConfigResolved(plugin, { warn }, path.join(root, "vite.config.ts"));
-    expect(warn).toHaveBeenCalledTimes(1);
-  });
-
-  it("suppresses the warning via silenceIgnorePatternWarning", async () => {
-    const root = makeFixture();
-    const plugin = sharedRoutes({ silenceIgnorePatternWarning: true });
-    await callConfig(plugin, root);
-    const warn = vi.fn();
-    callConfigResolved(plugin, { warn });
-    expect(warn).not.toHaveBeenCalled();
   });
 
   it("watches the routes dir and every shared root, never the target dirs", async () => {

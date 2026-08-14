@@ -41,6 +41,15 @@ describe("rewriteToHelper / rewriteToPackage", () => {
     expect(rewriteToHelper(done, filePath)).toBeUndefined();
   });
 
+  it("retargets a stale .gen specifier left behind by a rename", () => {
+    const stale =
+      "import { createSharedRoute } from './oldName.gen'\nexport const shared = createSharedRoute({})\n";
+    expect(rewriteToHelper(stale, filePath)).toContain("from './$providerId.gen'");
+    // non-.gen relative imports are never touched
+    const sibling = "import { createSharedRoute } from './factory'\n";
+    expect(rewriteToHelper(sibling, filePath)).toBeUndefined();
+  });
+
   it("leaves unrelated imports and broken files alone", () => {
     expect(rewriteToHelper("import { mount } from 'tanstack-shared-routes'\n", filePath)).toBe(
       undefined,
@@ -48,14 +57,15 @@ describe("rewriteToHelper / rewriteToPackage", () => {
     expect(rewriteToHelper("not valid ts ((((", filePath)).toBeUndefined();
   });
 
-  it("rewriteToPackage is the exact inverse", () => {
+  it("rewriteToPackage points any .gen specifier back at the package", () => {
     const code = "import { createSharedRoute } from './$providerId.gen'\n";
-    expect(rewriteToPackage(code, filePath)).toBe(
+    expect(rewriteToPackage(code)).toBe(
       "import { createSharedRoute } from 'tanstack-shared-routes'\n",
     );
-    expect(rewriteToPackage("import { createSharedRoute } from './other.gen'\n", filePath)).toBe(
-      undefined,
+    expect(rewriteToPackage("import { createSharedRoute } from './other.gen'\n")).toBe(
+      "import { createSharedRoute } from 'tanstack-shared-routes'\n",
     );
+    expect(rewriteToPackage("import { createSharedRoute } from './factory'\n")).toBeUndefined();
   });
 });
 
