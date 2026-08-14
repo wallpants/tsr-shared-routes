@@ -13,7 +13,7 @@
     "@tanstack/react-start": "^1.168.44",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tanstack-shared-routes": "file:../..",
+    "tanstack-shared-routes": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
