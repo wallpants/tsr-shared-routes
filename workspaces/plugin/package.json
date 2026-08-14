@@ -11,6 +11,11 @@
     "vite-plugin"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wallpants/tsr-shared-routes.git",
+    "directory": "workspaces/plugin"
+  },
   "bin": {
     "tsr-shared-routes": "./dist/cli.js"
   },

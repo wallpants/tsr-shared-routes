@@ -1,16 +1,64 @@
 {
   "name": "tsr-shared-routes-monorepo",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wallpants/tsr-shared-routes.git"
+  },
   "workspaces": [
     "workspaces/*"
   ],
   "type": "module",
   "scripts": {
+    "format": "oxfmt .",
     "build": "bun run --cwd workspaces/plugin build",
     "test": "bun run --cwd workspaces/plugin test",
-    "typecheck": "bun run --cwd workspaces/plugin typecheck && bun run --cwd workspaces/typecheck typecheck"
+    "typecheck": "bun run --cwd workspaces/plugin typecheck && bun run --cwd workspaces/typecheck typecheck",
+    "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.1",
+    "@commitlint/config-conventional": "^21.2.0",
+    "@commitlint/cz-commitlint": "^21.2.0",
+    "commitizen": "^4.3.2",
+    "husky": "^9.1.7",
+    "inquirer": "^12.11.1",
+    "oxfmt": "^0.63.0",
+    "semantic-release": "^25.0.9",
     "typescript": "^7.0.2"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ],
+    "rules": {
+      "body-max-line-length": [
+        0
+      ],
+      "footer-max-line-length": [
+        0
+      ]
+    }
+  },
+  "config": {
+    "commitizen": {
+      "path": "@commitlint/cz-commitlint"
+    }
+  },
+  "release": {
+    "branches": [
+      "main"
+    ],
+    "plugins": [
+      "@semantic-release/commit-analyzer",
+      "@semantic-release/release-notes-generator",
+      [
+        "@semantic-release/npm",
+        {
+          "pkgRoot": "workspaces/plugin"
+        }
+      ],
+      "@semantic-release/github"
+    ]
   }
 }
