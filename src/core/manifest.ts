@@ -5,7 +5,7 @@ import { atomicWrite, isOwned, readIfExists } from "./fsio";
 export interface ManifestFileEntry {
   /** Root-relative posix path of the generated file. */
   path: string;
-  role: "wrapper" | "helper";
+  role: "wrapper" | "helper" | "runtime";
   /** Root-relative posix path of the responsible mount file. */
   mount?: string;
   /** Root-relative posix path of the shared source file. */

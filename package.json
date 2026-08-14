@@ -1,7 +1,7 @@
 {
   "name": "tanstack-shared-routes",
   "version": "0.0.0",
-  "description": "Mount a shared directory of TanStack Router file-based routes at multiple paths — companion codegen, no fork required",
+  "description": "Mount a shared directory of TanStack Router file-based routes at multiple paths.",
   "keywords": [
     "file-based-routing",
     "shared-routes",

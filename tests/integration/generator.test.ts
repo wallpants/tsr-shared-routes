@@ -68,6 +68,7 @@ const WRAPPERS = [
 // chart.tsx, whose helper covers both).
 const HELPERS = [
   "src/shared/providers/$providerId.gen.tsx",
+  "src/shared/providers/__shared-routes.gen.tsx",
   "src/shared/providers/chart.gen.tsx",
   "src/shared/providers/index.gen.tsx",
   "src/shared/providers/stats.overview.gen.tsx",
@@ -189,6 +190,7 @@ describe("pipeline + real Generator", () => {
       "src/routes/inventory/providers/reviews/$reviewId.tsx",
       "src/routes/inventory/providers/reviews/index.tsx",
       "src/shared/reviews/$reviewId.gen.tsx",
+      "src/shared/reviews/__shared-routes.gen.tsx",
       "src/shared/reviews/index.gen.tsx",
     ]);
 
@@ -257,6 +259,7 @@ describe("pipeline + real Generator", () => {
     const summary = runPipeline(makeConfig(root));
     expect(summary.written).toEqual([
       "src/routes/inventory/-shared/providers/$providerId.gen.tsx",
+      "src/routes/inventory/-shared/providers/__shared-routes.gen.tsx",
       "src/routes/inventory/-shared/providers/index.gen.tsx",
       "src/routes/inventory/providers/$providerId.tsx",
       "src/routes/inventory/providers/index.tsx",
@@ -280,7 +283,7 @@ describe("pipeline + real Generator", () => {
     // Steady state holds here too.
     const second = runPipeline(makeConfig(root));
     expect(second.written).toEqual([]);
-    expect(second.unchanged).toBe(4);
+    expect(second.unchanged).toBe(5);
   });
 
   it("removing a mount cleans its wrappers and the generator drops the whole subtree", async () => {

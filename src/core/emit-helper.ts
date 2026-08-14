@@ -17,6 +17,8 @@ export interface HelperSpec {
   mountIds: Array<string>;
   /** Shared source file shown in the header comment (root-relative, posix). */
   sourceLabel: string;
+  /** Relative import specifier of the shared root's `__shared-routes.gen` module. */
+  runtimeSpecifier: string;
   /** First line(s) of the file; must start with the banner sentinel. */
   banner: string;
 }
@@ -40,7 +42,7 @@ export function renderHelper(spec: HelperSpec): string {
 /* eslint-disable */
 // source: ${spec.sourceLabel}
 // mounts: ${mountIds.join(", ")}
-import { makeCreateSharedRoute } from "tanstack-shared-routes";
+import { makeCreateSharedRoute } from ${JSON.stringify(spec.runtimeSpecifier)};
 
 type MountFilePaths = ${mountUnion};
 

@@ -1,11 +1,11 @@
 # tanstack-shared-routes
 
-Mount a shared directory of TanStack Router file-based route files at multiple paths. A small codegen companion — the stock TanStack Router / Start generator keeps doing all the real work, no fork, no patched packages. It solves the long-standing "reuse a subtree of file routes under several parents" problem ([TanStack/router#1108](https://github.com/TanStack/router/discussions/1108)): you write each route file once in a shared directory, declare where it mounts, and every mount gets real, fully typed routes in the generated route tree.
+Mount a shared directory of TanStack Router file-based route files at multiple paths. A small codegen companion. The stock TanStack Router / Start generator keeps doing all the real work, no patched packages. It solves the long-standing "reuse a subtree of file routes under several parents" problem ([TanStack/router#1108](https://github.com/TanStack/router/discussions/1108)): you write each route file once in a shared directory, declare where it mounts, and every mount gets real, fully typed routes in the generated route tree.
 
 ## Quick start
 
 ```sh
-npm install tanstack-shared-routes
+bun add tanstack-shared-routes
 ```
 
 Add the plugin **before** `tanstackStart()` (or `tanstackRouter()`), and tell the stock generator to ignore mount files:
@@ -31,15 +31,67 @@ export default defineConfig({
 
 ## Your first shared routes
 
-The walkthrough assumes `vite dev` is running — the plugin scaffolds and regenerates as you save. **Mount first**: types flow from the generated route tree, so declaring where routes mount before authoring them gives you full typing from the first line (see [Authoring before mounting](#authoring-before-mounting) for the other order).
+Run _vite_ to get the codegen running:
 
-**1. Declare the mount.** Create an empty `*.mount.ts` file inside your routes directory — the plugin immediately fills in the boilerplate. The file's own name and location decide where the shared directory mounts; you only type the relative path to the shared directory (it's fine if it doesn't exist yet):
+```sh
+vite dev
+```
+
+Create a directory inside your `routes` dir, where you will define your `shared` routes. You can have as many shared directories as you want.
+
+For this example we create `src/routes/-providers/` (the name of this directory doesn't affect mounting paths).
+
+Since TanStack requires Routes to be mounted somewhere to be added to the generated route tree and provide types, you need to specify at least _one_ mounting point.
 
 ```ts
 // src/routes/inventory/providers.mount.ts  →  mounts at /inventory/providers
 import { mount } from "tanstack-shared-routes";
+export default mount("../-providers");
+```
 
-export default mount("../../shared/providers");
+You then create your first shared route `src/routes/-providers/route.tsx`. The generator will add the following contents when you create the file:
+
+```tsx
+// src/routes/-providers/route.tsx — scaffolded for you
+import { createSharedRoute } from "./route.gen";
+
+export const shared = createSharedRoute({});
+```
+
+The generator then also creates a `__shared-routes.gen.tsx` file _per shared directory_ and a `*.gen.tsx` _per route_ inside the shared directory.
+
+You'll also find a `providers` directory at `src/routes/inventory/providers/*` where your shared routes will be mounted.
+
+All generated files are automatically removed if you either delete the `*.mount.ts` file or you delete any of the route files inside your shared directory.
+
+By default, all generated files are _gitignored_, you can disable that in the plugin config. Running `vite build` will generate them again when you want to run in production.
+
+```tsx
+// src/routes/-providers/route.tsx — define your route
+import { createSharedRoute } from "./route.gen";
+import { createServerFn } from "@tanstack/react-start";
+
+const loader = createServerFn({ method: "GET" }).handler(() => ({ hello: "world" }));
+
+export const shared = createSharedRoute({
+  loader: () => loader(),
+  component: MyComponent,
+});
+
+// I highly recommend you use *.lazy.tsx (more below)
+function MyComponent() {
+  // fully typed useLoaderData, useLoaderDeps, useParams, useSearch, useNavigate
+  const params = shared.useParams();
+  const search = shared.useSearch();
+  const loaderData = shared.useLoaderData();
+  const loaderDeps = shared.useLoaderDeps();
+
+  return (
+    <div>
+      <p>Hello {loaderData.hello}</p>
+    </div>
+  );
+}
 ```
 
 A second mount file is all it takes to mount the same directory somewhere else:
@@ -48,81 +100,24 @@ A second mount file is all it takes to mount the same directory somewhere else:
 // src/routes/finances/providers.mount.ts  →  same shared dir, second mount
 import { mount } from "tanstack-shared-routes";
 
-export default mount("../../shared/providers");
+export default mount("../-providers");
 ```
-
-**2. Create the shared route files.** Create an empty file in the shared directory using normal route-file names (`index.tsx`, `$providerId.tsx`, `route.tsx`, …). On save, the plugin populates it:
-
-```tsx
-// src/shared/providers/$providerId.tsx — scaffolded for you
-import { createSharedRoute } from "./$providerId.gen";
-
-export const shared = createSharedRoute({});
-```
-
-…and in the same pass generates the `$providerId.gen.tsx` sibling it imports, plus a wrapper route at every mount. Nothing is ever red: the `.gen` helper depends only on the file's name and the mount set, so it exists before you write a single option.
-
-**3. Author with full types.** `createSharedRoute` takes the same options as `createFileRoute`, and the returned `shared` carries typed hooks that resolve the current mount at runtime:
-
-```tsx
-// src/shared/providers/$providerId.tsx
-import { z } from "zod";
-import { createSharedRoute } from "./$providerId.gen";
-import { fetchProvider } from "./-data";
-
-export const shared = createSharedRoute({
-  validateSearch: z.object({ tab: z.enum(["info", "orders"]).default("info") }),
-  loaderDeps: ({ search }) => ({ tab: search.tab }),
-  loader: ({ params }) => fetchProvider(params.providerId),
-  component: ProviderDetail,
-});
-
-function ProviderDetail() {
-  const provider = shared.useLoaderData(); // typed from the loader
-  const { providerId } = shared.useParams(); // typed from the path
-  const { tab } = shared.useSearch(); // typed from the schema
-  const navigate = shared.useNavigate(); // relative to the current mount
-
-  return (
-    <div>
-      <h2>
-        {provider.name} ({providerId})
-      </h2>
-      <shared.Link to="." search={{ tab: "orders" }}>
-        Orders
-      </shared.Link>
-      <button onClick={() => navigate({ to: ".", search: { tab } })}>Refresh</button>
-    </div>
-  );
-}
-```
-
-Types compose across files exactly like stock file-based routes: create `$providerId.delete.tsx` next to the file above and its `shared.useParams()` is typed by `$providerId`'s validation.
 
 One authoring rule: the route export **must be named `shared`** (generated wrappers import exactly that name; other exports are yours to use freely).
 
-Prefer one-shot codegen? `npx tanstack-shared-routes generate` runs the same pipeline without a dev server. A working app lives in [`examples/basic-start-app`](examples/basic-start-app).
+Prefer one-shot codegen? `npx tanstack-shared-routes generate` runs the same pipeline without a dev server.
 
 ### Authoring before mounting
 
 `import { createSharedRoute } from "tanstack-shared-routes"` always resolves — the package exports a placeholder factory, so you can sketch shared route files before any mount exists. It is the same implementation the `.gen` helpers use, instantiated with an empty mount set, and it types as much as is knowable without a route tree: option keys are checked, the `validateSearch` → `loaderDeps` → `loader` inference chains work, and the data hooks are typed from the file's own options — `useLoaderData()` returns your loader's type, `useSearch()` your schema's output, `useParams()` your `params.parse` result. What only appears after the first mount: params derived from the file's path, anything **inherited from parent routes** (their search schemas, params, context), and navigation targets — those live in the generated route tree. The moment a mount points at the directory, the codegen generates the `.gen` siblings and **retargets your imports to them automatically** (and back to the package, should the last mount disappear) — the same kind of in-place correction the stock generator applies to `createFileRoute` path literals when you move a file.
 
-### Mid-edit behavior
-
-The dev pipeline is built so half-finished files never break anything:
-
-- An empty or unfilled mount file (`mount('')`) is simply ignored until you fill in the path; a malformed one logs a single line and is skipped — codegen for everything else continues, and files generated for that mount are kept until it becomes valid (or is deleted).
-- A shared route file that doesn't export `shared` yet gets its `.gen` helper but no wrapper — the route appears when the export does. An existing route never disappears because of a mid-edit syntax error.
-- Generated files are cleaned up when their **source is gone** (shared file or mount file deleted), never because a file is temporarily invalid.
-- The CLI is strict where dev is forgiving: `generate` fails loudly on invalid mount files, and `generate --check` reports any drift for CI.
-
 ### What are the `.gen` files?
 
-`$providerId.gen.tsx` and friends are **generated by this tool**, right next to each shared route file — you never write or edit them (they carry the same ownership banner as the wrappers and are cleaned up with them). Each one exports the `createSharedRoute` for that specific file. All the type and runtime machinery lives in the package (`makeCreateSharedRoute`); the generated file contributes only what is file-specific — the union of the file's route ids under every mount:
+`route.gen.tsx` and friends are **generated by this tool**, right next to each shared route file — you never write or edit them (they carry the same ownership banner as the wrappers and are cleaned up with them). Each one exports the `createSharedRoute` for that specific file, contributing only what is file-specific — the union of the file's route ids under every mount:
 
 ```tsx
 // src/shared/providers/$providerId.gen.tsx  (GENERATED)
-import { makeCreateSharedRoute } from "tanstack-shared-routes";
+import { makeCreateSharedRoute } from "./__shared-routes.gen";
 
 type MountFilePaths = "/finances/providers/$providerId" | "/inventory/providers/$providerId";
 
@@ -132,7 +127,7 @@ export const createSharedRoute = makeCreateSharedRoute<MountFilePaths>(
 );
 ```
 
-Options are contextually typed against the union of mounts, and the returned object carries hooks typed via `RouteApi<union of mount ids>` which at runtime resolve the CURRENT mount (nearest match, walked up to the closest mount id) and pass it as `from` — the shared-file equivalent of `Route.useLoaderData()` / `Route.useNavigate()` in a normal route file. That's why the helper must be per-file and generated: it is the one place that knows the full mount set, which is what makes the hooks and relative navigation both strictly typed and runtime-correct under every mount.
+The `makeCreateSharedRoute` machinery they share lives in `__shared-routes.gen.tsx`, generated once per shared directory. It is emitted **into your project** rather than imported from the package for the same reason the stock generator emits `routeTree.gen.ts` into your app: `routeTree.gen.ts` registers your route tree by augmenting `@tanstack/react-router` via `declare module`, and module augmentation binds to one resolved copy of that module — your app's.
 
 ## How it works
 
@@ -182,6 +177,7 @@ export const shared = createSharedRoute({ loader: () => fetchData() });
 import type { LazyRouteOptions } from "@tanstack/react-router";
 import { shared } from "./chart";
 
+// MUST BE NAMED `sharedLazy`
 export const sharedLazy = { component: Chart } satisfies LazyRouteOptions;
 
 function Chart() {

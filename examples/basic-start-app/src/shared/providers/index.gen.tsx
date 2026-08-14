@@ -2,7 +2,7 @@
 /* eslint-disable */
 // source: src/shared/providers/index.tsx
 // mounts: /finances/providers/, /inventory/providers/
-import { makeCreateSharedRoute } from "tanstack-shared-routes";
+import { makeCreateSharedRoute } from "./__shared-routes.gen";
 
 type MountFilePaths = "/finances/providers/" | "/inventory/providers/";
 

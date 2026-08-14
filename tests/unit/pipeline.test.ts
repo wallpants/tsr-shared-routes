@@ -33,8 +33,13 @@ const WRAPPERS = [
 ];
 
 // `.gen.tsx` typed-helper siblings: route files only — the standalone
-// chart.lazy.tsx gets none.
-const HELPERS = ["src/shared/providers/$providerId.gen.tsx", "src/shared/providers/index.gen.tsx"];
+// chart.lazy.tsx gets none. `__shared-routes.gen.tsx` is the per-shared-root
+// runtime module every helper imports.
+const HELPERS = [
+  "src/shared/providers/$providerId.gen.tsx",
+  "src/shared/providers/__shared-routes.gen.tsx",
+  "src/shared/providers/index.gen.tsx",
+];
 
 const GENERATED = [...WRAPPERS, ...HELPERS];
 
@@ -70,7 +75,8 @@ describe("runPipeline", () => {
     expect(manifest!.dirs).toContain("src/routes/inventory/providers");
     expect(manifest!.dirs).not.toContain("src/shared/providers");
     for (const helperPath of HELPERS) {
-      expect(manifest!.files.find((f) => f.path === helperPath)?.role).toBe("helper");
+      const role = manifest!.files.find((f) => f.path === helperPath)?.role;
+      expect(role).toBe(helperPath.includes("__shared-routes") ? "runtime" : "helper");
     }
   });
 
@@ -171,8 +177,12 @@ describe("runPipeline", () => {
     expect(exists(path.join(root, "src/routes/finances/providers"))).toBe(false);
     expect(exists(path.join(root, "src/routes/finances"))).toBe(true);
 
-    // Helpers shrink to the surviving mount's union.
-    expect(summary.written).toEqual(HELPERS);
+    // Helpers shrink to the surviving mount's union (the runtime module is
+    // mount-independent and stays byte-identical).
+    expect(summary.written).toEqual([
+      "src/shared/providers/$providerId.gen.tsx",
+      "src/shared/providers/index.gen.tsx",
+    ]);
     const helper = readFile(path.join(root, "src/shared/providers/$providerId.gen.tsx"));
     expect(helper).toContain('type MountFilePaths = "/inventory/providers/$providerId";');
     expect(helper).not.toContain("/finances/providers/$providerId");

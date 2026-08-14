@@ -16,6 +16,8 @@ export interface PlannedFile {
   kind: "wrapper" | "wrapper-lazy";
   /** Absolute path of the original shared route file the wrapper imports. */
   sharedFilePath: string;
+  /** Absolute path of the shared ROOT the file was scanned under. */
+  sharedRoot: string;
   /** Absolute path of the mount file responsible for this wrapper. */
   mountFilePath: string;
   /** Route path of the mount's target dir (e.g. `/inventory/providers`). */
@@ -272,6 +274,7 @@ export function buildPlan(
           targetPath: path.join(targetDir, ...routeFile.relPath.split("/")),
           kind: routeFile.lazy ? "wrapper-lazy" : "wrapper",
           sharedFilePath: path.join(sharedDir, ...routeFile.relPath.split("/")),
+          sharedRoot: sharedDir,
           mountFilePath,
           mountRoutePathPrefix: prefix,
         });
