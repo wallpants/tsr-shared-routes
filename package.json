@@ -1,13 +1,16 @@
 {
-  "name": "tanstack-shared-routes-monorepo",
+  "name": "tsr-shared-routes-monorepo",
   "private": true,
   "workspaces": [
     "workspaces/*"
   ],
   "type": "module",
   "scripts": {
-    "build": "bun run --cwd workspaces/tanstack-shared-routes build",
-    "test": "bun run --cwd workspaces/tanstack-shared-routes test",
-    "typecheck": "bun run --cwd workspaces/tanstack-shared-routes typecheck && bun run --cwd workspaces/basic-start-app typecheck"
+    "build": "bun run --cwd workspaces/plugin build",
+    "test": "bun run --cwd workspaces/plugin test",
+    "typecheck": "bun run --cwd workspaces/plugin typecheck && bun run --cwd workspaces/typecheck typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
   }
 }

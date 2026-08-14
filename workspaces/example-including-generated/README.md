@@ -1,0 +1,28 @@
+> [!IMPORTANT]
+> `gitignore` is set to false in `vite.config.ts` for you to see what
+> the generated files `(*.gen.ts)` look like in this example.
+> You can ignore them in your project.
+
+# Basic TanStack Start app created with:
+
+```bash
+bunx @tanstack/cli@latest create
+```
+
+# Getting Started
+
+To run this application:
+
+```bash
+bun install
+bun --bun run dev
+```
+
+# Building For Production
+
+To build this application for production:
+
+```bash
+bun run build
+bun start
+```
