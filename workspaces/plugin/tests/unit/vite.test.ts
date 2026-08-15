@@ -2,16 +2,24 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 import { describe, expect, it, vi } from "vitest";
+import { MOUNT_IGNORE_PATTERN } from "../../src/core/ignore-pattern";
 import { sharedRoutes } from "../../src/vite";
-import { exists, makeTmpDir, mountFileSource, readFile, writeTree } from "../helpers";
+import {
+   exists,
+   makeTmpDir,
+   mountFileSource,
+   readFile,
+   stockRouteSource,
+   writeTree,
+} from "../helpers";
 
 function makeFixture(): string {
    const root = makeTmpDir();
    writeTree(root, {
-      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
-      "src/routes/finances/providers.mount.ts": mountFileSource("../../shared/providers"),
-      "src/shared/providers/index.tsx": "export const shared = {} as any\n",
-      "src/shared/providers/$providerId.tsx": "export const shared = {} as any\n",
+      "src/routes/help/route.tsx": stockRouteSource("/help"),
+      "src/routes/help/$topicId.tsx": stockRouteSource("/help/$topicId"),
+      "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+      "src/routes/finances/help.mount.ts": mountFileSource("../help"),
    });
    return root;
 }
@@ -80,82 +88,101 @@ describe("sharedRoutes vite plugin", () => {
    it("runs the pipeline in the config hook so wrappers exist before configResolved", async () => {
       const root = makeFixture();
       await callConfig(sharedRoutes(), root);
-      expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(true);
-      expect(exists(path.join(root, "src/routes/finances/providers/$providerId.tsx"))).toBe(true);
+      expect(exists(path.join(root, "src/routes/inventory/help/route.tsx"))).toBe(true);
+      expect(exists(path.join(root, "src/routes/finances/help/$topicId.tsx"))).toBe(true);
    });
 
    it("maintains tsr.config.json from the config hook", async () => {
       const root = makeFixture();
       await callConfig(sharedRoutes(), root);
       expect(JSON.parse(readFile(path.join(root, "tsr.config.json")))).toEqual({
-         routeFileIgnorePattern: "\\.mount\\.(ts|js)$",
+         routeFileIgnorePattern: MOUNT_IGNORE_PATTERN,
       });
    });
 
-   it("watches the routes dir and every shared root, never the target dirs", async () => {
+   it("watches the routes dir", async () => {
       const root = makeFixture();
       const plugin = sharedRoutes();
       await callConfig(plugin, root);
       const fake = makeFakeServer();
       callConfigureServer(plugin, fake);
       expect(fake.watched).toContain(path.join(root, "src", "routes"));
-      expect(fake.watched).toContain(path.join(root, "src", "shared", "providers"));
-      for (const dir of fake.watched) {
-         expect(dir).not.toContain(path.join("routes", "inventory", "providers"));
-         expect(dir).not.toContain(path.join("routes", "finances", "providers"));
-      }
    });
 
-   it("re-runs the pipeline when a shared file is removed (unlink under shared root)", async () => {
+   it("re-runs the pipeline when a source file is removed (unlink under a source root)", async () => {
       const root = makeFixture();
       const plugin = sharedRoutes();
       await callConfig(plugin, root);
       const fake = makeFakeServer();
       callConfigureServer(plugin, fake);
 
-      const sharedFile = path.join(root, "src", "shared", "providers", "$providerId.tsx");
-      fs.rmSync(sharedFile);
-      fake.emit("unlink", sharedFile);
+      const sourceFile = path.join(root, "src", "routes", "help", "$topicId.tsx");
+      fs.rmSync(sourceFile);
+      fake.emit("unlink", sourceFile);
       await settle();
-      expect(exists(path.join(root, "src/routes/inventory/providers/$providerId.tsx"))).toBe(false);
-      expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(true);
+      expect(exists(path.join(root, "src/routes/inventory/help/$topicId.tsx"))).toBe(false);
+      expect(exists(path.join(root, "src/routes/inventory/help/route.tsx"))).toBe(true);
    });
 
-   it("re-runs when a mount file changes, but ignores content changes under shared roots", async () => {
+   it("re-runs on mount-file changes, ignores plain content edits when nothing is deferred", async () => {
       const root = makeFixture();
       const plugin = sharedRoutes();
       await callConfig(plugin, root);
       const fake = makeFakeServer();
       callConfigureServer(plugin, fake);
 
-      // Content-only change to a shared route file: no codegen (wrapper mtime stable).
-      const sharedFile = path.join(root, "src", "shared", "providers", "index.tsx");
-      const wrapper = path.join(root, "src", "routes", "inventory", "providers", "index.tsx");
+      // Content-only change to a source route file: no codegen (wrapper mtime stable).
+      const sourceFile = path.join(root, "src", "routes", "help", "route.tsx");
+      const wrapper = path.join(root, "src", "routes", "inventory", "help", "route.tsx");
       fs.rmSync(wrapper); // if a rerun happens it would come back
-      fake.emit("change", sharedFile);
+      fake.emit("change", sourceFile);
       await settle();
       expect(exists(wrapper)).toBe(false);
 
       // Mount file event: rerun (wrapper reappears).
-      const mountFile = path.join(root, "src", "routes", "inventory", "providers.mount.ts");
+      const mountFile = path.join(root, "src", "routes", "inventory", "help.mount.ts");
       fake.emit("change", mountFile);
       await settle();
       expect(exists(wrapper)).toBe(true);
    });
 
-   it("ignores events under wrapper target dirs (loop-proofing)", async () => {
+   it("re-runs on a source content edit while a wrapper is deferred (Route export appears)", async () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/help/route.tsx": "// authoring in progress\n",
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+      });
+      const plugin = sharedRoutes();
+      await callConfig(plugin, root);
+      const fake = makeFakeServer();
+      callConfigureServer(plugin, fake);
+
+      const wrapper = path.join(root, "src", "routes", "inventory", "help", "route.tsx");
+      expect(exists(wrapper)).toBe(false); // deferred: no Route export yet
+
+      const sourceFile = path.join(root, "src", "routes", "help", "route.tsx");
+      fs.writeFileSync(sourceFile, stockRouteSource("/help"));
+      fake.emit("change", sourceFile);
+      await settle();
+      expect(exists(wrapper)).toBe(true);
+   });
+
+   it("ignores events under wrapper target dirs and on .gen files (loop-proofing)", async () => {
       const root = makeFixture();
       const plugin = sharedRoutes();
       await callConfig(plugin, root);
       const fake = makeFakeServer();
       callConfigureServer(plugin, fake);
 
-      const wrapper = path.join(root, "src", "routes", "inventory", "providers", "index.tsx");
+      const wrapper = path.join(root, "src", "routes", "inventory", "help", "route.tsx");
       fs.rmSync(wrapper);
       // The generator touching a wrapper must not re-trigger us.
       fake.emit("unlink", wrapper);
       fake.emit("add", wrapper);
       fake.emit("change", wrapper);
+      // Our own .gen sibling writes must not re-trigger us either.
+      fake.emit("change", path.join(root, "src", "routes", "help", "route.gen.tsx"));
+      fake.emit("add", path.join(root, "src", "routes", "help", "route.gen.tsx"));
       await settle();
       expect(exists(wrapper)).toBe(false);
    });
@@ -168,9 +195,9 @@ describe("sharedRoutes vite plugin", () => {
       callConfigureServer(plugin, fake);
 
       // Make the next pipeline run fail: unowned file at a target path.
-      const wrapper = path.join(root, "src", "routes", "inventory", "providers", "index.tsx");
+      const wrapper = path.join(root, "src", "routes", "inventory", "help", "route.tsx");
       fs.writeFileSync(wrapper, "// my own file\n");
-      const mountFile = path.join(root, "src", "routes", "inventory", "providers.mount.ts");
+      const mountFile = path.join(root, "src", "routes", "inventory", "help.mount.ts");
       fake.emit("change", mountFile);
       fake.emit("change", mountFile);
       fake.emit("change", mountFile);
@@ -180,7 +207,64 @@ describe("sharedRoutes vite plugin", () => {
       expect(readFile(wrapper)).toBe("// my own file\n"); // untouched, server alive
    });
 
-   it("picks up newly referenced shared roots and watches them after a rerun", async () => {
+   it("pulls wrapper modules into the HMR batch when a mounted source file updates", async () => {
+      const root = makeFixture();
+      const plugin = sharedRoutes();
+      await callConfig(plugin, root);
+
+      const hook = plugin.hotUpdate as unknown;
+      const handler = (
+         typeof hook === "function" ? hook : (hook as { handler: unknown }).handler
+      ) as (this: unknown, options: unknown) => unknown;
+
+      const sourceModule = { id: "source" };
+      const inventoryWrapper = { id: "inventory-wrapper" };
+      const financesWrapper = { id: "finances-wrapper" };
+      const byFile = new Map<string, Set<unknown>>([
+         [path.join(root, "src/routes/inventory/help/route.tsx"), new Set([inventoryWrapper])],
+         [path.join(root, "src/routes/finances/help/route.tsx"), new Set([financesWrapper])],
+      ]);
+      const context = {
+         environment: {
+            name: "client",
+            moduleGraph: { getModulesByFile: (file: string) => byFile.get(file) },
+         },
+      };
+
+      const result = handler.call(context, {
+         type: "update",
+         file: path.join(root, "src/routes/help/route.tsx"),
+         timestamp: 0,
+         modules: [sourceModule],
+         read: () => "",
+      });
+      expect(result).toEqual([sourceModule, financesWrapper, inventoryWrapper]);
+
+      // a file no mount covers: no opinion, default HMR behavior
+      const none = handler.call(context, {
+         type: "update",
+         file: path.join(root, "src/routes/index.tsx"),
+         timestamp: 0,
+         modules: [sourceModule],
+         read: () => "",
+      });
+      expect(none).toBeUndefined();
+
+      // non-client environments are left alone (TanStack already reloads SSR)
+      const ssr = handler.call(
+         { environment: { ...context.environment, name: "ssr" } },
+         {
+            type: "update",
+            file: path.join(root, "src/routes/help/route.tsx"),
+            timestamp: 0,
+            modules: [sourceModule],
+            read: () => "",
+         },
+      );
+      expect(ssr).toBeUndefined();
+   });
+
+   it("picks up a newly added mount and generates its wrappers", async () => {
       const root = makeFixture();
       const plugin = sharedRoutes();
       await callConfig(plugin, root);
@@ -188,12 +272,11 @@ describe("sharedRoutes vite plugin", () => {
       callConfigureServer(plugin, fake);
 
       writeTree(root, {
-         "src/routes/reviews.mount.ts": mountFileSource("../shared/reviews"),
-         "src/shared/reviews/index.tsx": "export const shared = {} as any\n",
+         "src/routes/reviews/index.tsx": stockRouteSource("/reviews/"),
+         "src/routes/archive/reviews.mount.ts": mountFileSource("../reviews"),
       });
-      fake.emit("add", path.join(root, "src", "routes", "reviews.mount.ts"));
+      fake.emit("add", path.join(root, "src", "routes", "archive", "reviews.mount.ts"));
       await settle();
-      expect(exists(path.join(root, "src/routes/reviews/index.tsx"))).toBe(true);
-      expect(fake.watched).toContain(path.join(root, "src", "shared", "reviews"));
+      expect(exists(path.join(root, "src/routes/archive/reviews/index.tsx"))).toBe(true);
    });
 });

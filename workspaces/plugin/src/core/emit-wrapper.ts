@@ -7,9 +7,17 @@ export interface WrapperSpec {
    routeIdLiteral: string;
    /** Absolute path of the wrapper file being rendered. */
    targetPath: string;
-   /** Absolute path of the shared file the wrapper imports. */
+   /** Absolute path of the source route file the wrapper imports. */
    sharedFilePath: string;
-   /** Shared file path as shown in the source comment (root-relative, posix). */
+   /**
+    * Route ids of the source file under every mount (home first) — passed to
+    * patchSharedHooks so stock `Route.useX()` call sites in the source
+    * resolve the mount they actually render under.
+    */
+   mountIds: Array<string>;
+   /** Relative import specifier of the project's `sharedRoutes.gen` runtime module. */
+   runtimeSpecifier: string;
+   /** Source file path as shown in the source comment (root-relative, posix). */
    sourceLabel: string;
    /** Mount file path as shown in the source comment (root-relative, posix). */
    mountLabel: string;
@@ -18,8 +26,8 @@ export interface WrapperSpec {
 }
 
 /**
- * POSIX, extensionless import specifier from the wrapper to the shared file
- * (e.g. `../../../shared/providers/$providerId`).
+ * POSIX, extensionless import specifier from the wrapper to the source file
+ * (e.g. `../../help/$topicId`).
  */
 export function computeImportPath(fromWrapperPath: string, toSharedFilePath: string): string {
    const relative = path
@@ -31,23 +39,31 @@ export function computeImportPath(fromWrapperPath: string, toSharedFilePath: str
 }
 
 /**
- * Renders a wrapper file. The non-lazy shape mirrors the verified spike
- * (workspaces/typecheck) byte-for-byte modulo names/paths and formatting
- * style (we emit single quotes, no semicolons; the stock generator's
- * transformer preserves whatever style is on disk).
+ * Renders a wrapper file. Mirrors the verified spike
+ * (workspaces/typecheck/src/routes/inventory/help/*) modulo names/paths: the
+ * wrapper re-registers the STOCK source route's options at the mount's route
+ * id, with the source's input-level generics extracted via SourceRouteTypes,
+ * and monkey-patches the source instance's hooks with the mount-resolving
+ * versions.
  */
 export function renderWrapper(spec: WrapperSpec): string {
    const routerModule = "@tanstack/react-router";
    const importPath = computeImportPath(spec.targetPath, spec.sharedFilePath);
+   const idList = [...new Set(spec.mountIds)].map((id) => `'${id}'`).join(", ");
    const header = `${spec.banner}\n/* eslint-disable */\n// source: ${spec.sourceLabel} (mount: ${spec.mountLabel})\n`;
 
    if (spec.kind === "wrapper-lazy") {
       return (
          header +
          `import { createLazyFileRoute } from '${routerModule}'\n` +
-         `import { sharedLazy } from '${importPath}'\n` +
+         `import { patchSharedHooks } from '${spec.runtimeSpecifier}'\n` +
+         `import { Route as sharedLazy } from '${importPath}'\n` +
          `\n` +
-         `export const Route = createLazyFileRoute('${spec.routeIdLiteral}')(sharedLazy)\n`
+         `patchSharedHooks(sharedLazy, [${idList}])\n` +
+         `\n` +
+         `const { id: _id, ...lazyOptions } = sharedLazy.options\n` +
+         `\n` +
+         `export const Route = createLazyFileRoute('${spec.routeIdLiteral}')(lazyOptions)\n`
       );
    }
 
@@ -55,9 +71,13 @@ export function renderWrapper(spec: WrapperSpec): string {
       header +
       `import type { Register } from '${routerModule}'\n` +
       `import { createFileRoute } from '${routerModule}'\n` +
-      `import { shared } from '${importPath}'\n` +
+      `import type { SourceRouteTypes } from '${spec.runtimeSpecifier}'\n` +
+      `import { patchSharedHooks } from '${spec.runtimeSpecifier}'\n` +
+      `import { Route as shared } from '${importPath}'\n` +
       `\n` +
-      `type T = (typeof shared)['~types']\n` +
+      `patchSharedHooks(shared, [${idList}])\n` +
+      `\n` +
+      `type T = SourceRouteTypes<typeof shared>\n` +
       `\n` +
       `export const Route = createFileRoute('${spec.routeIdLiteral}')<\n` +
       `  Register,\n` +

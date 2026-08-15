@@ -2,14 +2,21 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { CliIO } from "../../src/cli";
 import { main } from "../../src/cli";
-import { exists, makeTmpDir, mountFileSource, readFile, writeTree } from "../helpers";
+import {
+   exists,
+   makeTmpDir,
+   mountFileSource,
+   readFile,
+   stockRouteSource,
+   writeTree,
+} from "../helpers";
 
 function makeFixture(): string {
    const root = makeTmpDir();
    writeTree(root, {
-      "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
-      "src/shared/providers/index.tsx": "export const shared = {} as any\n",
-      "src/shared/providers/$providerId.tsx": "export const shared = {} as any\n",
+      "src/routes/help/index.tsx": stockRouteSource("/help/"),
+      "src/routes/help/$topicId.tsx": stockRouteSource("/help/$topicId"),
+      "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
    });
    return root;
 }
@@ -31,9 +38,9 @@ describe("cli main", () => {
       const io = makeIO();
       const code = main(["generate", "--root", root], io);
       expect(code).toBe(0);
-      expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(true);
-      expect(io.logs).toContain("wrote src/routes/inventory/providers/$providerId.tsx");
-      expect(io.logs).toContain("wrote src/shared/providers/$providerId.gen.tsx");
+      expect(exists(path.join(root, "src/routes/inventory/help/index.tsx"))).toBe(true);
+      expect(io.logs).toContain("wrote src/routes/inventory/help/$topicId.tsx");
+      expect(io.logs).toContain("wrote src/routes/help/$topicId.gen.tsx");
       expect(io.logs).toContain("wrote tsr.config.json");
       expect(io.logs.at(-1)).toBe("done: 6 written, 0 deleted, 0 unchanged");
    });
@@ -43,8 +50,8 @@ describe("cli main", () => {
       const io = makeIO();
       const code = main(["generate", "--check", "--root", root], io);
       expect(code).toBe(1);
-      expect(io.logs).toContain("would write src/routes/inventory/providers/index.tsx");
-      expect(exists(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(false);
+      expect(io.logs).toContain("would write src/routes/inventory/help/index.tsx");
+      expect(exists(path.join(root, "src/routes/inventory/help/index.tsx"))).toBe(false);
    });
 
    it("--check on a clean project exits 0", () => {
@@ -60,12 +67,12 @@ describe("cli main", () => {
       const root = makeTmpDir();
       writeTree(root, {
          "shared-routes.config.json": JSON.stringify({ routesDirectory: "./app/routes" }),
-         "app/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
-         "app/shared/providers/index.tsx": "export const shared = {} as any\n",
+         "app/routes/help/index.tsx": stockRouteSource("/help/"),
+         "app/routes/inventory/help.mount.ts": mountFileSource("../help"),
       });
       const io = makeIO();
       expect(main(["generate", "--root", root], io)).toBe(0);
-      expect(exists(path.join(root, "app/routes/inventory/providers/index.tsx"))).toBe(true);
+      expect(exists(path.join(root, "app/routes/inventory/help/index.tsx"))).toBe(true);
    });
 
    it("reports an unparsable config file and exits 1", () => {
@@ -79,12 +86,12 @@ describe("cli main", () => {
    it("reports pipeline errors with the fix message and exits 1", () => {
       const root = makeFixture();
       writeTree(root, {
-         "src/routes/inventory/providers/index.tsx": "// my own route\n",
+         "src/routes/inventory/help/index.tsx": "// my own route\n",
       });
       const io = makeIO();
       expect(main(["generate", "--root", root], io)).toBe(1);
       expect(io.errors[0]).toContain("refusing to overwrite");
-      expect(readFile(path.join(root, "src/routes/inventory/providers/index.tsx"))).toBe(
+      expect(readFile(path.join(root, "src/routes/inventory/help/index.tsx"))).toBe(
          "// my own route\n",
       );
    });

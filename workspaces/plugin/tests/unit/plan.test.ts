@@ -1,18 +1,19 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { discoverMounts } from "../../src/core/discover";
-import type { SharedRoutesErrorCode } from "../../src/core/errors";
 import { SharedRoutesError } from "../../src/core/errors";
 import { buildPlan } from "../../src/core/plan";
-import { makeConfig, makeTmpDir, mountFileSource, writeTree } from "../helpers";
+import { makeConfig, makeTmpDir, mountFileSource, stockRouteSource, writeTree } from "../helpers";
 
-function planFor(root: string, overrides = {}) {
-   const config = makeConfig(root, overrides);
-   const { mounts } = discoverMounts(path.join(root, "src", "routes"));
-   return buildPlan(config, mounts);
+function planFor(root: string, options: { lenient?: boolean } = {}) {
+   const config = makeConfig(root);
+   const discovery = discoverMounts(path.join(root, "src", "routes"), {
+      lenient: options.lenient ?? false,
+   });
+   return buildPlan(config, discovery.mounts, options);
 }
 
-function expectPlanError(root: string, code: SharedRoutesErrorCode): SharedRoutesError {
+function expectPlanError(root: string, code: string): SharedRoutesError {
    try {
       planFor(root);
    } catch (error) {
@@ -20,247 +21,185 @@ function expectPlanError(root: string, code: SharedRoutesErrorCode): SharedRoute
       expect((error as SharedRoutesError).code).toBe(code);
       return error as SharedRoutesError;
    }
-   throw new Error(`expected buildPlan to throw ${code}`);
+   throw new Error("expected buildPlan to throw");
 }
 
-describe("buildPlan mapping", () => {
-   it("maps mount files to target dirs and shared files to planned wrappers", () => {
+describe("buildPlan", () => {
+   it("maps a mounted visible subtree to wrapper files under the target dir", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
-         "src/routes/finances/providers.mount.ts": mountFileSource("../../shared/providers"),
-         "src/shared/providers/index.tsx": "",
-         "src/shared/providers/$providerId.tsx": "",
-         "src/shared/providers/chart.lazy.tsx": "",
-         "src/shared/providers/-helpers.ts": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/help/$topicId.tsx": stockRouteSource("/help/$topicId"),
+         "src/routes/help/chart.lazy.tsx": "",
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
       });
       const plan = planFor(root);
-
-      const finTarget = path.join(root, "src", "routes", "finances", "providers");
-      const invTarget = path.join(root, "src", "routes", "inventory", "providers");
-      expect(plan.targetDirs).toEqual([finTarget, invTarget]);
-      expect(plan.sharedRoots).toEqual([path.join(root, "src", "shared", "providers")]);
-      expect(plan.warnings).toEqual([]);
-
-      expect(plan.files).toHaveLength(6);
-      const lazy = plan.files.find((f) => f.targetPath === path.join(invTarget, "chart.lazy.tsx"));
-      expect(lazy).toMatchObject({
-         kind: "wrapper-lazy",
-         sharedFilePath: path.join(root, "src", "shared", "providers", "chart.lazy.tsx"),
-         mountFilePath: path.join(root, "src", "routes", "inventory", "providers.mount.ts"),
-         mountRoutePathPrefix: "/inventory/providers",
-      });
-      const index = plan.files.find((f) => f.targetPath === path.join(finTarget, "index.tsx"));
-      expect(index).toMatchObject({ kind: "wrapper", mountRoutePathPrefix: "/finances/providers" });
+      const routesDir = path.join(root, "src", "routes");
+      expect(plan.targetDirs).toEqual([path.join(routesDir, "inventory", "help")]);
+      expect(plan.sourceRoots).toEqual([path.join(routesDir, "help")]);
+      expect(plan.skippedMounts).toBe(0);
+      expect(plan.files).toEqual([
+         {
+            targetPath: path.join(routesDir, "inventory", "help", "$topicId.tsx"),
+            kind: "wrapper",
+            sourceFilePath: path.join(routesDir, "help", "$topicId.tsx"),
+            sourceRoot: path.join(routesDir, "help"),
+            mountFilePath: path.join(routesDir, "inventory", "help.mount.ts"),
+         },
+         {
+            targetPath: path.join(routesDir, "inventory", "help", "chart.lazy.tsx"),
+            kind: "wrapper-lazy",
+            sourceFilePath: path.join(routesDir, "help", "chart.lazy.tsx"),
+            sourceRoot: path.join(routesDir, "help"),
+            mountFilePath: path.join(routesDir, "inventory", "help.mount.ts"),
+         },
+         {
+            targetPath: path.join(routesDir, "inventory", "help", "route.tsx"),
+            kind: "wrapper",
+            sourceFilePath: path.join(routesDir, "help", "route.tsx"),
+            sourceRoot: path.join(routesDir, "help"),
+            mountFilePath: path.join(routesDir, "inventory", "help.mount.ts"),
+         },
+      ]);
    });
 
-   it("handles dot-flat mount names", () => {
+   it("allows overlapping sources: a mount may target a subtree of another mount's source", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/inventory.providers.mount.ts": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/help/guides/faq.tsx": stockRouteSource("/help/guides/faq"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+         "src/routes/settings/guides.mount.ts": mountFileSource("../help/guides"),
       });
       const plan = planFor(root);
-      expect(plan.targetDirs).toEqual([path.join(root, "src", "routes", "inventory.providers")]);
-      expect(plan.files[0]!.mountRoutePathPrefix).toBe("/inventory/providers");
+      const routesDir = path.join(root, "src", "routes");
+      expect(plan.sourceRoots).toEqual([
+         path.join(routesDir, "help"),
+         path.join(routesDir, "help", "guides"),
+      ]);
+      const faqTargets = plan.files
+         .filter((file) => file.sourceFilePath.endsWith("faq.tsx"))
+         .map((file) => file.targetPath)
+         .sort();
+      expect(faqTargets).toEqual([
+         path.join(routesDir, "inventory", "help", "guides", "faq.tsx"),
+         path.join(routesDir, "settings", "guides", "faq.tsx"),
+      ]);
    });
 
-   it("expands nested mounts under the outer target, importing innermost files", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("../../shared/providers"),
-         "src/shared/providers/index.tsx": "",
-         "src/shared/providers/reviews.mount.ts": mountFileSource("../reviews"),
-         "src/shared/reviews/index.tsx": "",
-         "src/shared/reviews/$reviewId.tsx": "",
-      });
-      const plan = planFor(root);
-      const outer = path.join(root, "src", "routes", "inventory", "providers");
-      expect(plan.targetDirs).toEqual([outer, path.join(outer, "reviews")]);
-      const nested = plan.files.find(
-         (f) => f.targetPath === path.join(outer, "reviews", "$reviewId.tsx"),
-      );
-      expect(nested).toMatchObject({
-         sharedFilePath: path.join(root, "src", "shared", "reviews", "$reviewId.tsx"),
-         mountFilePath: path.join(root, "src", "shared", "providers", "reviews.mount.ts"),
-         mountRoutePathPrefix: "/inventory/providers/reviews",
-      });
-   });
-
-   it("warns when a mount is named after the route token", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/route.mount.ts": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
-      });
-      const plan = planFor(root);
-      expect(plan.warnings).toHaveLength(1);
-      expect(plan.warnings[0]).toContain("route token");
-   });
-});
-
-describe("buildPlan validation", () => {
-   it("rejects __root.mount.ts", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/__root.mount.ts": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
-      });
-      expectPlanError(root, "INVALID_MOUNT_NAME");
-   });
-
-   it("rejects index.mount.ts", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/index.mount.ts": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
-      });
-      expectPlanError(root, "INVALID_MOUNT_NAME");
+   it("rejects __root and index-token mount names", () => {
+      for (const name of ["__root", "index"]) {
+         const root = makeTmpDir();
+         writeTree(root, {
+            "src/routes/help/route.tsx": stockRouteSource("/help"),
+            [`src/routes/${name}.mount.ts`]: mountFileSource("./help"),
+         });
+         expectPlanError(root, "INVALID_MOUNT_NAME");
+      }
    });
 
    it("rejects mount names starting with the ignore prefix", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/-providers.mount.ts": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/-help.mount.ts": mountFileSource("./help"),
       });
       expectPlanError(root, "INVALID_MOUNT_NAME");
    });
 
-   it("rejects a missing shared dir, naming the mount and the resolved path", () => {
+   it("warns on a mount named after the route token", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/providers.mount.ts": mountFileSource("../nope"),
-      });
-      const error = expectPlanError(root, "SHARED_DIR_NOT_FOUND");
-      expect(error.message).toContain("providers.mount.ts");
-      expect(error.message).toContain(path.join(root, "src", "nope"));
-   });
-
-   it("rejects a shared dir inside the routes directory", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/providers.mount.ts": mountFileSource("./shared"),
-         "src/routes/shared/index.tsx": "",
-      });
-      expectPlanError(root, "SHARED_DIR_INSIDE_ROUTES");
-   });
-
-   it("rejects a colocated shared dir not under an ignore-prefixed directory", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("./shared"),
-         "src/routes/inventory/shared/index.tsx": "",
-      });
-      const error = expectPlanError(root, "SHARED_DIR_INSIDE_ROUTES");
-      expect(error.message).toContain('"-"');
-   });
-
-   it("accepts a colocated shared dir under an ignore-prefixed directory", () => {
-      const root = makeTmpDir();
-      writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("./-shared/providers"),
-         "src/routes/inventory/-shared/providers/index.tsx": "",
-         "src/routes/inventory/-shared/providers/$providerId.tsx": "",
+         "src/routes/help/index.tsx": stockRouteSource("/help/"),
+         "src/routes/sub/route.mount.ts": mountFileSource("../help"),
       });
       const plan = planFor(root);
-      const target = path.join(root, "src", "routes", "inventory", "providers");
-      expect(plan.targetDirs).toEqual([target]);
-      expect(plan.sharedRoots).toEqual([
-         path.join(root, "src", "routes", "inventory", "-shared", "providers"),
-      ]);
-      expect(plan.files.map((f) => f.targetPath).sort()).toEqual([
-         path.join(target, "$providerId.tsx"),
-         path.join(target, "index.tsx"),
-      ]);
+      expect(plan.warnings.some((warning) => warning.includes("route token"))).toBe(true);
    });
 
-   it("accepts a colocated shared dir whose own basename is ignore-prefixed", () => {
+   it("rejects a missing source directory", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("./-providers"),
-         "src/routes/inventory/-providers/index.tsx": "",
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
       });
-      const plan = planFor(root);
-      expect(plan.files).toHaveLength(1);
+      expectPlanError(root, "SOURCE_DIR_NOT_FOUND");
    });
 
-   it("honors a routeFileIgnorePrefix override for colocated shared dirs", () => {
+   it("rejects a source directory outside the routes directory", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("./~shared/providers"),
-         "src/routes/inventory/~shared/providers/index.tsx": "",
+         "src/shared/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../../shared/help"),
       });
-      // Default prefix "-": "~shared" is NOT ignored by the generator → error.
-      expectPlanError(root, "SHARED_DIR_INSIDE_ROUTES");
-      // With the matching override the colocation is legal.
-      const plan = planFor(root, { routeFileIgnorePrefix: "~" });
-      expect(plan.files).toHaveLength(1);
+      expectPlanError(root, "SOURCE_DIR_OUTSIDE_ROUTES");
    });
 
-   it("rejects a shared dir containing the routes directory", () => {
+   it("rejects mounting the routes directory itself", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/providers.mount.ts": mountFileSource("../.."),
-         "src/shared/index.tsx": "",
+         "src/routes/index.tsx": stockRouteSource("/"),
+         "src/routes/sub/all.mount.ts": mountFileSource(".."),
       });
-      expectPlanError(root, "SHARED_DIR_CONTAINS_ROUTES");
+      expectPlanError(root, "SOURCE_DIR_IS_ROUTES_ROOT");
    });
 
-   it("rejects two mounts with the same target dir", () => {
+   it("rejects overlapping target dirs", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/providers.mount.ts": mountFileSource("../shared"),
-         "src/routes/providers.mount.js": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+         "src/routes/inventory/help/deep.mount.ts": mountFileSource("../../help"),
       });
       expectPlanError(root, "TARGET_OVERLAP");
    });
 
-   it("rejects a target dir nested inside another mount's target dir", () => {
+   it("rejects a mount whose target lies inside a mounted source subtree", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/a.mount.ts": mountFileSource("../shared"),
-         "src/routes/a/b.mount.ts": mountFileSource("../../shared"),
-         "src/shared/index.tsx": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/docs/intro.tsx": stockRouteSource("/docs/intro"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+         // this mount's target dir (src/routes/help/docs) is inside the
+         // mounted source subtree src/routes/help
+         "src/routes/help/docs.mount.ts": mountFileSource("../docs"),
       });
-      expectPlanError(root, "TARGET_OVERLAP");
+      expectPlanError(root, "TARGET_INSIDE_SOURCE");
    });
 
-   it("rejects colliding generated files (physical subtree vs nested mount)", () => {
+   it("rejects a mount whose source lies inside another mount's target dir", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/providers.mount.ts": mountFileSource("../shared/providers"),
-         "src/shared/providers/reviews/index.tsx": "",
-         "src/shared/providers/reviews.mount.ts": mountFileSource("../reviews"),
-         "src/shared/reviews/index.tsx": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+         "src/routes/inventory/help/.keep": "",
+         // sources generated output: src/routes/inventory/help is mount 1's target
+         "src/routes/copy.mount.ts": mountFileSource("./inventory/help"),
       });
-      expectPlanError(root, "TARGET_COLLISION");
+      expectPlanError(root, "SOURCE_INSIDE_TARGET");
    });
 
-   it("detects mount cycles and prints the chain", () => {
+   it("lenient mode skips a broken mount, keeps the rest, and counts the skip", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/inventory/providers.mount.ts": mountFileSource("../../sharedA"),
-         "src/sharedA/index.tsx": "",
-         "src/sharedA/sub.mount.ts": mountFileSource("../sharedB"),
-         "src/sharedB/index.tsx": "",
-         "src/sharedB/other.mount.ts": mountFileSource("../sharedA"),
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+         "src/routes/finances/missing.mount.ts": mountFileSource("../does-not-exist"),
       });
-      const error = expectPlanError(root, "MOUNT_CYCLE");
-      expect(error.message).toContain("mount cycle detected");
-      expect(error.message).toContain(path.join("src", "sharedA"));
-      expect(error.message).toContain(path.join("src", "sharedB"));
-      expect(error.message).toContain("other.mount.ts");
+      expect(() => planFor(root)).toThrow(SharedRoutesError); // strict
+      const plan = planFor(root, { lenient: true });
+      expect(plan.skippedMounts).toBe(1);
+      expect(plan.warnings).toHaveLength(1);
+      expect(plan.targetDirs).toEqual([path.join(root, "src", "routes", "inventory", "help")]);
+      expect(plan.files).toHaveLength(1);
    });
 
-   it("allows the same shared dir under multiple mounts (no false cycle)", () => {
+   it("containment conflicts abort the plan even in lenient mode", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/a.mount.ts": mountFileSource("../shared"),
-         "src/routes/b.mount.ts": mountFileSource("../shared"),
-         "src/shared/index.tsx": "",
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         "src/routes/a/help.mount.ts": mountFileSource("../help"),
+         "src/routes/a/help/deep.mount.ts": mountFileSource("../../help"),
       });
-      expect(planFor(root).files).toHaveLength(2);
+      expect(() => planFor(root, { lenient: true })).toThrow(SharedRoutesError);
    });
 });

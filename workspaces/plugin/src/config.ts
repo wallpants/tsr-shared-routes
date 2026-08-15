@@ -25,8 +25,6 @@ export const configSchema = z.object({
          message: `banner must start with ${JSON.stringify(BANNER_SENTINEL)} so generated files stay recognizable`,
       }),
    /** Mirror of the TanStack generator options that affect file classification. */
-   quoteStyle: z.enum(["single", "double"]).default("single"),
-   semicolons: z.boolean().default(false),
    routeFileIgnorePrefix: z.string().default("-"),
    indexToken: z.string().default("index"),
    routeToken: z.string().default("route"),

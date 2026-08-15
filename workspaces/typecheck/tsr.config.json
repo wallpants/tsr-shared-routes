@@ -1,3 +1,3 @@
 {
-  "routeFileIgnorePattern": "\\.mount\\.(ts|js)$"
+  "routeFileIgnorePattern": "\\.mount\\.(ts|js)$|\\.gen\\.(ts|js)x?$"
 }

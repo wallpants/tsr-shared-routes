@@ -1,6 +1,6 @@
 import path from "node:path";
 import { atomicWrite, readIfExists } from "./fsio";
-import { MOUNT_IGNORE_PATTERN } from "./ignore-pattern";
+import { IGNORE_SAMPLES, MOUNT_IGNORE_PATTERN } from "./ignore-pattern";
 
 export const TSR_CONFIG_FILE = "tsr.config.json";
 
@@ -13,7 +13,7 @@ export interface TsrConfigUpdate {
 
 /**
  * Ensures the project's `tsr.config.json` carries a `routeFileIgnorePattern`
- * covering `*.mount.ts` files. That file is read by BOTH the `tsr` CLI and
+ * covering `*.mount.ts` files and `.gen` siblings. That file is read by BOTH the `tsr` CLI and
  * TanStack's vite plugin (inline vite options win over it), so managing it
  * here hides mount files from the stock generator in every mode without any
  * user wiring. An existing user pattern is extended by alternation, never
@@ -56,7 +56,7 @@ export function ensureTsrConfig(root: string, dryRun: boolean): TsrConfigUpdate 
             warning: manualFixWarning("has an invalid routeFileIgnorePattern regex"),
          };
       }
-      if (pattern.test("x.mount.ts") && pattern.test("x.mount.js")) return { changed: false };
+      if (IGNORE_SAMPLES.every((sample) => pattern.test(sample))) return { changed: false };
       next = `(?:${existing})|${MOUNT_IGNORE_PATTERN}`;
    }
 
@@ -68,5 +68,5 @@ export function ensureTsrConfig(root: string, dryRun: boolean): TsrConfigUpdate 
 }
 
 function manualFixWarning(reason: string): string {
-   return `${TSR_CONFIG_FILE} ${reason} — set routeFileIgnorePattern to cover *.mount.ts files yourself (e.g. ${JSON.stringify(MOUNT_IGNORE_PATTERN)})`;
+   return `${TSR_CONFIG_FILE} ${reason} — set routeFileIgnorePattern to cover *.mount.ts and *.gen.* files yourself (e.g. ${JSON.stringify(MOUNT_IGNORE_PATTERN)})`;
 }

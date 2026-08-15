@@ -12,8 +12,8 @@ function RootComponent() {
          </head>
          <body>
             <nav>
-               <Link to="/">Home</Link> <Link to="/inventory">Inventory</Link>{" "}
-               <Link to="/finances">Finances</Link>
+               <Link to="/">Home</Link> <Link to="/help">Help</Link>{" "}
+               <Link to="/inventory">Inventory</Link>
             </nav>
             <Outlet />
             <Scripts />

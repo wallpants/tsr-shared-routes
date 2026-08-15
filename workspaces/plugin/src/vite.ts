@@ -6,7 +6,7 @@ import { resolveConfig } from "./config";
 import { isMountFile } from "./core/discover";
 import type { PipelineSummary } from "./core/pipeline";
 import { runPipeline } from "./core/pipeline";
-import { GEN_FILE_RE } from "./core/scan-shared";
+import { GEN_FILE_RE } from "./core/scan-source";
 
 export type { SharedRoutesUserConfig } from "./config";
 
@@ -33,16 +33,23 @@ function formatError(error: unknown): string {
 export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
    let resolved: SharedRoutesConfig | undefined;
    let routesDir = "";
-   let sharedRoots: Array<string> = [];
+   let sourceRoots: Array<string> = [];
    let targetDirs: Array<string> = [];
+   let wrappersBySource: Record<string, Array<string>> = {};
+   let hasDeferred = false;
    let pendingWarnings: Array<string> = [];
 
    const applySummary = (
       summary: PipelineSummary,
       logger?: { warn: (msg: string, opts?: { timestamp: boolean }) => void },
    ): void => {
-      sharedRoots = summary.sharedRoots;
+      sourceRoots = summary.sourceRoots;
       targetDirs = summary.targetDirs;
+      wrappersBySource = summary.wrappersBySource;
+      // While any wrapper is deferred on a missing `Route` export, plain
+      // content edits become relevant: the save that adds the export only
+      // fires a `change` event.
+      hasDeferred = summary.incomplete.some((line) => line.includes("does not export"));
       const lines = summary.errors.map((warning) => `tsr-shared-routes: ${warning}`);
       if (logger === undefined) {
          pendingWarnings = lines; // no logger yet in the config hook — defer
@@ -51,9 +58,56 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
       }
    };
 
+   /**
+    * HMR: TanStack's route modules self-accept (their injected hot-update
+    * code stops propagation at the route file), so when a mounted SOURCE
+    * file hot-updates, its wrapper modules would never re-run — leaving the
+    * freshly created Route instance unpatched (wrong-mount navigation, and a
+    * Rules-of-Hooks crash when the change flips a rendered component's hooks
+    * from patched to stock). Pulling the wrappers into the same HMR batch
+    * re-executes them, re-patching the new instance before React Refresh
+    * re-renders.
+    */
+   const extraHotModules = <TModule>(
+      file: string,
+      getModulesByFile: (file: string) => Set<TModule> | undefined,
+   ): Array<TModule> => {
+      const wrappers = wrappersBySource[path.resolve(file)];
+      if (wrappers === undefined) return [];
+      const extra: Array<TModule> = [];
+      for (const wrapperPath of wrappers) {
+         for (const mod of getModulesByFile(wrapperPath) ?? []) extra.push(mod);
+      }
+      return extra;
+   };
+
    return {
       name: "tsr-shared-routes",
       enforce: "pre",
+
+      // Vite 6+ (environment API). Client only: the SSR environment already
+      // page-reloads on route-file changes (TanStack's handling) — adding
+      // the wrappers there would just schedule a duplicate reload.
+      hotUpdate(options) {
+         if (this.environment.name !== "client") return;
+         if (options.type !== "update") return;
+         const extra = extraHotModules(options.file, (file) =>
+            this.environment.moduleGraph.getModulesByFile(file),
+         );
+         if (extra.length === 0) return;
+         const merged = new Set([...options.modules, ...extra]);
+         return [...merged];
+      },
+
+      // Vite 5 fallback (ignored by Vite 6+ when hotUpdate is present).
+      handleHotUpdate(ctx) {
+         const extra = extraHotModules(ctx.file, (file) =>
+            ctx.server.moduleGraph.getModulesByFile(file),
+         );
+         if (extra.length === 0) return;
+         const merged = new Set([...ctx.modules, ...extra]);
+         return [...merged];
+      },
 
       async config(viteConfig) {
          const root = path.resolve(viteConfig.root ?? process.cwd());
@@ -72,15 +126,13 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
          if (config === undefined) return;
          const logger = server.config.logger;
 
-         const watchDirs = (): void => {
-            server.watcher.add(routesDir);
-            for (const dir of sharedRoots) server.watcher.add(dir);
-            // Wrapper target dirs are deliberately NEVER watched by us: the stock
-            // generator corrects wrapper literals in place, and reacting to that
-            // would create a write/watch loop. (Vite itself still watches them, so
-            // the stock generator picks our wrapper writes up — desired.)
-         };
-         watchDirs();
+         // Source subtrees live inside the routes directory, so watching it
+         // covers everything. Wrapper target dirs are deliberately NEVER
+         // reacted to by us: the stock generator corrects wrapper literals in
+         // place, and reacting to that would create a write/watch loop. (Vite
+         // itself still watches them, so the stock generator picks our
+         // wrapper writes up — desired.)
+         server.watcher.add(routesDir);
 
          let timer: ReturnType<typeof setTimeout> | undefined;
          let running = false;
@@ -95,7 +147,6 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
             running = true;
             try {
                applySummary(runPipeline(config, { lenient: true }), logger);
-               watchDirs(); // mounts may reference shared roots we did not watch yet
             } catch (error) {
                // Never crash the dev server over a codegen problem.
                logger.error(formatError(error), { timestamp: true });
@@ -115,27 +166,33 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
 
          const isRelevant = (event: string, file: string): boolean => {
             const absPath = path.resolve(file);
-            // Our own output: the generator edits wrappers (literal corrections)
-            // and we write them — neither may re-trigger the pipeline.
+            if (!isWithin(routesDir, absPath)) return false;
+            // Our own output: the generator edits wrappers (literal
+            // corrections) and we write them — neither may re-trigger the
+            // pipeline.
             if (targetDirs.some((dir) => isWithin(dir, absPath))) return false;
-            if (sharedRoots.some((dir) => isWithin(dir, absPath))) {
-               // Our own `.gen` helper writes must never re-trigger the pipeline.
-               if (GEN_FILE_RE.test(absPath)) return false;
-               // Content edits flow through HMR; only structure changes need codegen.
-               if (
-                  event === "add" ||
-                  event === "unlink" ||
-                  event === "addDir" ||
-                  event === "unlinkDir"
-               ) {
-                  return true;
-               }
-               // Editing a nested mount file changes the plan, not just content.
-               return event === "change" && isMountFile(absPath);
+            // Our own `.gen` sibling writes must never re-trigger either.
+            if (GEN_FILE_RE.test(absPath)) return false;
+            // Any event on a mount file changes the plan.
+            if (isMountFile(absPath)) return true;
+            // Structure changes (files entering/leaving mounted subtrees, new
+            // directories) change the plan; plain content edits flow through
+            // HMR — except while a wrapper is deferred on a missing `Route`
+            // export, where the resolving save is a `change` event on a
+            // source file.
+            if (
+               event === "add" ||
+               event === "unlink" ||
+               event === "addDir" ||
+               event === "unlinkDir"
+            ) {
+               return true;
             }
-            // Any event on a mount file under the routes dir changes the plan.
-            if (isWithin(routesDir, absPath)) return isMountFile(absPath);
-            return false;
+            return (
+               event === "change" &&
+               hasDeferred &&
+               sourceRoots.some((dir) => isWithin(dir, absPath))
+            );
          };
 
          server.watcher.on("all", (event, file) => {

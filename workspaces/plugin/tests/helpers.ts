@@ -30,8 +30,18 @@ export function writeTree(root: string, tree: Record<string, string>): void {
    }
 }
 
-export function mountFileSource(sharedDirRelative: string): string {
-   return `import { mount } from 'tsr-shared-routes'\nexport default mount('${sharedDirRelative}')\n`;
+export function mountFileSource(sourceDirRelative: string): string {
+   return `import { mount } from 'tsr-shared-routes'\nexport default mount('${sourceDirRelative}')\n`;
+}
+
+/** A minimal stock route file (what mounted source files are in v2). */
+export function stockRouteSource(routeId: string): string {
+   return `import { createFileRoute } from '@tanstack/react-router'\n\nexport const Route = createFileRoute('${routeId}')({})\n`;
+}
+
+/** A minimal stock `.lazy` route file. */
+export function stockLazyRouteSource(routeId: string): string {
+   return `import { createLazyFileRoute } from '@tanstack/react-router'\n\nexport const Route = createLazyFileRoute('${routeId}')({})\n`;
 }
 
 export function makeConfig(

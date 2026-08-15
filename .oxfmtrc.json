@@ -3,9 +3,9 @@
   "ignorePatterns": [".github", "*.gen.ts"],
   "printWidth": 100,
   "tabWidth": 3,
-  "sortImports": {
-    "newlinesBetween": false
-  },
+  // "sortImports": {
+  //   "newlinesBetween": false
+  // },
   "overrides": [
     {
       "files": ["*.json", "*.md"],

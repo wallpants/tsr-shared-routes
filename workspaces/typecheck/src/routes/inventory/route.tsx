@@ -8,7 +8,7 @@ function InventoryLayout() {
    return (
       <section>
          <h1>Inventory</h1>
-         <Link to="/inventory/providers">Providers</Link>
+         <Link to="/inventory/help">Help</Link> <Link to="/inventory/stock">Stock</Link>
          <Outlet />
       </section>
    );

@@ -126,7 +126,7 @@ describe("classifyMountFile", () => {
    it("classifies the canonical form as valid", () => {
       expect(classifyMountFile(mountFileSource("../shared"), "a.mount.ts")).toEqual({
          kind: "valid",
-         sharedDirRelative: "../shared",
+         sourceDirRelative: "../shared",
       });
    });
 
@@ -179,11 +179,11 @@ describe("discoverMountFiles / discoverMounts", () => {
       expect(mounts).toEqual([
          {
             mountFilePath: path.join(routesDir, "finances", "deep", "nested.mount.js"),
-            sharedDirRelative: "../../../shared",
+            sourceDirRelative: "../../../shared",
          },
          {
             mountFilePath: path.join(routesDir, "inventory", "providers.mount.ts"),
-            sharedDirRelative: "../../shared",
+            sourceDirRelative: "../../shared",
          },
       ]);
    });

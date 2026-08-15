@@ -1,21 +1,22 @@
 import path from "node:path";
 
 /**
- * `.gen.tsx` typed-helper emission. For every shared ROUTE file (non-lazy) a
- * sibling `<base>.gen.tsx` is generated inside the shared dir, exposing the
- * typed `createSharedRoute` factory for that file. All type + runtime
- * machinery lives in the generated runtime module (`makeCreateSharedRoute`);
- * the helper contributes only what is file-specific — the union of this
- * file's route ids under EVERY mount of its shared dir.
+ * `.gen.tsx` sibling emission. For every mounted SOURCE route file (non-lazy)
+ * a sibling `<base>.gen.tsx` is generated next to it, exporting the
+ * union-typed `shared` view for that file. All type + runtime machinery lives
+ * in the generated runtime module (`makeSharedRoute`); the sibling
+ * contributes only what is file-specific — the union of the file's route ids
+ * under EVERY mount, the home mount included. It imports nothing from the
+ * source file (the hooks resolve via the live match tree), so source files
+ * may import their sibling without creating a cycle.
  */
 export interface HelperSpec {
    /**
-    * Route ids of this shared file under every mount that references its
-    * shared dir (each planned wrapper's route-id literal), deduped, in plan
-    * order.
+    * Route ids of this source file under every mount — its own (home) id
+    * first, then one per covering mount — deduped, in plan order.
     */
    mountIds: Array<string>;
-   /** Shared source file shown in the header comment (root-relative, posix). */
+   /** Source file shown in the header comment (root-relative, posix). */
    sourceLabel: string;
    /** Relative import specifier of the project's `sharedRoutes.gen` runtime module. */
    runtimeSpecifier: string;
@@ -23,14 +24,14 @@ export interface HelperSpec {
    banner: string;
 }
 
-/** Sibling helper path for a shared route file: `<base>.gen.tsx`. */
-export function helperPathFor(sharedFilePath: string): string {
-   const dir = path.dirname(sharedFilePath);
-   const base = path.basename(sharedFilePath).replace(/\.(tsx|ts|jsx|js)$/, "");
+/** Sibling path for a source route file: `<base>.gen.tsx`. */
+export function helperPathFor(sourceFilePath: string): string {
+   const dir = path.dirname(sourceFilePath);
+   const base = path.basename(sourceFilePath).replace(/\.(tsx|ts|jsx|js)$/, "");
    return path.join(dir, `${base}.gen.tsx`);
 }
 
-/** Renders the helper file content. */
+/** Renders the `.gen.tsx` sibling content. */
 export function renderHelper(spec: HelperSpec): string {
    const mountIds = [...new Set(spec.mountIds)];
    const mountIdLines = mountIds.map((id) => `  ${JSON.stringify(id)},`).join("\n");
@@ -42,11 +43,11 @@ export function renderHelper(spec: HelperSpec): string {
 /* eslint-disable */
 // source: ${spec.sourceLabel}
 // mounts: ${mountIds.join(", ")}
-import { makeCreateSharedRoute } from ${JSON.stringify(spec.runtimeSpecifier)};
+import { makeSharedRoute } from ${JSON.stringify(spec.runtimeSpecifier)};
 
 type MountFilePaths = ${mountUnion};
 
-export const createSharedRoute = makeCreateSharedRoute<MountFilePaths>(
+export const shared = makeSharedRoute<MountFilePaths>(
   [
 ${mountIdLines}
   ],

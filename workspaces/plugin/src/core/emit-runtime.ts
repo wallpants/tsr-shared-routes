@@ -35,7 +35,7 @@ export function runtimeSpecifierFor(helperPath: string, runtimePath: string): st
 export function renderRuntimeModule(banner: string): string {
    return `${banner}
 /* eslint-disable */
-// The createSharedRoute machinery shared by every .gen helper.
+// The shared-route machinery used by every wrapper and .gen sibling.
 // Generated into your project (not imported from the package) so its types
 // resolve YOUR @tanstack/react-router instance — the one routeTree.gen.ts
 // augments. See the package README ("What are the .gen files?").

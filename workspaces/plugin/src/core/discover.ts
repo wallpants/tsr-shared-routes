@@ -11,8 +11,8 @@ const PACKAGE_NAME = "tsr-shared-routes";
 export interface DiscoveredMount {
    /** Absolute path of the `*.mount.ts` file. */
    mountFilePath: string;
-   /** The string literal passed to mount(): shared dir, relative to the mount file. */
-   sharedDirRelative: string;
+   /** The string literal passed to mount(): source route subtree, relative to the mount file. */
+   sourceDirRelative: string;
 }
 
 export function isMountFile(filePath: string): boolean {
@@ -22,7 +22,7 @@ export function isMountFile(filePath: string): boolean {
 const ACCEPTED_FORM = [
    "A mount file must contain exactly:",
    `  import { mount } from '${PACKAGE_NAME}'`,
-   "  export default mount('<relative-path-to-shared-dir>')",
+   "  export default mount('<relative-path-to-source-dir>')",
    "The argument must be a plain string literal (no template literals, variables, or expressions).",
 ].join("\n");
 
@@ -37,8 +37,8 @@ function parseError(mountFilePath: string, reason: string): SharedRoutesError {
 export const MOUNT_SCAFFOLD = `import { mount } from '${PACKAGE_NAME}'\n\nexport default mount('')\n`;
 
 export type MountClassification =
-   /** Well-formed with a non-empty shared-dir path. */
-   | { kind: "valid"; sharedDirRelative: string }
+   /** Well-formed with a non-empty source-dir path. */
+   | { kind: "valid"; sourceDirRelative: string }
    /** Blank file or `mount('')`: being authored right now — never an error. */
    | { kind: "incomplete" }
    /** Anything else; `error` carries the full accepted-form message. */
@@ -54,10 +54,10 @@ export type MountClassification =
 export function classifyMountFile(code: string, mountFilePath: string): MountClassification {
    if (code.trim() === "") return { kind: "incomplete" };
    try {
-      const sharedDirRelative = parseMountFileStrict(code, mountFilePath);
-      return sharedDirRelative === ""
+      const sourceDirRelative = parseMountFileStrict(code, mountFilePath);
+      return sourceDirRelative === ""
          ? { kind: "incomplete" }
-         : { kind: "valid", sharedDirRelative };
+         : { kind: "valid", sourceDirRelative };
    } catch (error) {
       if (error instanceof SharedRoutesError) return { kind: "invalid", error };
       throw error;
@@ -161,7 +161,7 @@ export function discoverMountFiles(routesDirectory: string): Array<string> {
 /**
  * Writes the mount boilerplate into a byte-empty (or whitespace-only) mount
  * file so creating one in an editor immediately yields the accepted form with
- * only the shared-dir path left to fill in. Returns true when scaffolded.
+ * only the source-dir path left to fill in. Returns true when scaffolded.
  */
 export function scaffoldEmptyMountFile(mountFilePath: string, code: string): boolean {
    if (code.trim() !== "") return false;
@@ -208,15 +208,15 @@ export function discoverMounts(
       if (scaffold && scaffoldEmptyMountFile(mountFilePath, code)) {
          scaffolded.push(mountFilePath);
          skipped.push(mountFilePath);
-         incomplete.push(`mount file ${mountFilePath} is waiting for its shared-dir path`);
+         incomplete.push(`mount file ${mountFilePath} is waiting for its source-dir path`);
          continue;
       }
       const classified = classifyMountFile(code, mountFilePath);
       if (classified.kind === "valid") {
-         mounts.push({ mountFilePath, sharedDirRelative: classified.sharedDirRelative });
+         mounts.push({ mountFilePath, sourceDirRelative: classified.sourceDirRelative });
       } else if (classified.kind === "incomplete") {
          skipped.push(mountFilePath);
-         incomplete.push(`mount file ${mountFilePath} is waiting for its shared-dir path`);
+         incomplete.push(`mount file ${mountFilePath} is waiting for its source-dir path`);
       } else if (lenient) {
          skipped.push(mountFilePath);
          warnings.push(

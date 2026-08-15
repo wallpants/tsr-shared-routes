@@ -91,7 +91,6 @@ export function main(argv: Array<string>, io: CliIO = defaultIO): number {
       for (const warning of summary.errors) io.error(`warning: ${warning}`);
       for (const note of summary.incomplete) io.log(`incomplete: ${note}`);
       for (const file of summary.scaffolded) io.log(`scaffolded ${file}`);
-      for (const file of summary.rewritten) io.log(`retargeted import in ${file}`);
 
       if (check) {
          for (const file of summary.written) io.log(`would write ${file}`);

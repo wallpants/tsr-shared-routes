@@ -1,3 +1,3 @@
 import { mount } from "tsr-shared-routes";
 
-export default mount("../-shared-two/");
+export default mount("../home/shared-two");

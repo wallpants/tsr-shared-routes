@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import type { SharedRoutesConfig } from "../config";
 import { discoverMounts } from "./discover";
@@ -11,15 +10,8 @@ import { updateGitignore } from "./gitignore";
 import type { Manifest, ManifestFileEntry } from "./manifest";
 import { cleanupStale, readManifest, writeManifest } from "./manifest";
 import { buildPlan } from "./plan";
-import { rewriteToHelper, rewriteToPackage } from "./rewrite-imports";
 import { computeRouteIdLiteral } from "./route-id";
-import {
-   hasSharedExport,
-   hasSharedLazyExport,
-   scaffoldIfEmpty,
-   sharedLazyScaffold,
-   sharedRouteScaffold,
-} from "./scaffold";
+import { hasRouteExport } from "./scaffold";
 import { TSR_CONFIG_FILE, ensureTsrConfig } from "./tsr-config";
 
 export interface PipelineSummary {
@@ -33,16 +25,21 @@ export interface PipelineSummary {
    unchanged: number;
    /** Non-fatal problems (hard failures throw SharedRoutesError instead). */
    errors: Array<string>;
-   /** Mid-edit states (unfilled mount files, missing `shared` exports) — informational. */
+   /** Mid-edit states (unfilled mount files, missing `Route` exports) — informational. */
    incomplete: Array<string>;
    /** Root-relative posix paths of user files populated with boilerplate this pass. */
    scaffolded: Array<string>;
-   /** Root-relative posix paths of shared files whose factory import was retargeted. */
-   rewritten: Array<string>;
-   /** Absolute paths of every shared dir involved in the plan (sorted). */
-   sharedRoots: Array<string>;
+   /** Absolute paths of every source dir involved in the plan (sorted). */
+   sourceRoots: Array<string>;
    /** Absolute paths of every wrapper target dir (sorted). */
    targetDirs: Array<string>;
+   /**
+    * Absolute source file path → absolute wrapper paths generated from it.
+    * The vite plugin uses this to pull wrapper modules into the same HMR
+    * batch as their source, so the re-created Route instance is re-patched
+    * before React re-renders.
+    */
+   wrappersBySource: Record<string, Array<string>>;
 }
 
 export interface PipelineOptions {
@@ -57,11 +54,12 @@ export interface PipelineOptions {
 }
 
 /**
- * Full codegen pass: discover mounts → scan shared dirs → plan → scaffold →
- * compute route-id literals → render wrappers → diff/adopt → atomic writes →
- * import retargeting → stale cleanup → manifest → gitignore. Validation
- * errors are raised before the first generated-file write (scaffolding of
- * byte-empty user files is the one additive mutation allowed earlier).
+ * Full codegen pass: discover mounts → scan source subtrees → plan → compute
+ * route-id literals (wrapper AND home ids) → render wrappers + `.gen`
+ * siblings → diff/adopt → atomic writes → stale cleanup → manifest →
+ * gitignore. Validation errors are raised before the first generated-file
+ * write (scaffolding of byte-empty mount files is the one additive mutation
+ * allowed earlier; empty ROUTE files are the stock generator's job now).
  */
 export function runPipeline(
    config: SharedRoutesConfig,
@@ -75,80 +73,81 @@ export function runPipeline(
    const runtimePath = runtimeModulePath(routesDir);
    const manifestPath = path.resolve(root, config.manifestPath);
    const rel = (p: string): string => path.relative(root, p).split(path.sep).join("/");
-
-   // 1-2. Discover + plan (throws only in strict mode / on global conflicts).
-   const discovery = discoverMounts(routesDir, { lenient, scaffold });
-   const plan = buildPlan(config, discovery.mounts, { lenient, scaffold });
-   const warnings = [...discovery.warnings, ...plan.warnings];
-   const incomplete = [...discovery.incomplete, ...plan.incomplete];
-   const scaffolded = [...discovery.scaffolded, ...plan.scaffolded];
-   const skippedMounts = discovery.skipped.length + plan.skippedMounts;
-
-   // 3. Scaffold byte-empty shared route files. The `.gen` helper each
-   //    scaffold imports is emitted later in this same pass (it depends only
-   //    on the file name and the mount set), so scaffolded files are valid
-   //    from birth and their wrappers are never deferred.
-   const sharedContent = new Map<string, string | undefined>();
-   const readShared = (filePath: string): string | undefined => {
-      if (!sharedContent.has(filePath)) sharedContent.set(filePath, readIfExists(filePath));
-      return sharedContent.get(filePath);
-   };
-   if (scaffold) {
-      for (const file of plan.files) {
-         const existing = readShared(file.sharedFilePath);
-         if (existing === undefined || existing.trim() !== "") continue;
-         const content =
-            file.kind === "wrapper-lazy"
-               ? sharedLazyScaffold()
-               : sharedRouteScaffold(file.sharedFilePath);
-         if (scaffoldIfEmpty(file.sharedFilePath, existing, content)) {
-            sharedContent.set(file.sharedFilePath, content);
-            scaffolded.push(file.sharedFilePath);
-         }
-      }
-   }
-
-   // 4. Compute literals and render desired content.
-   const desired = plan.files.map((file) => {
-      const wrapperRelPath = path.relative(routesDir, file.targetPath).split(path.sep).join("/");
-      const routeIdLiteral = computeRouteIdLiteral(wrapperRelPath, {
+   const literalFor = (filePath: string): string =>
+      computeRouteIdLiteral(path.relative(routesDir, filePath).split(path.sep).join("/"), {
          indexToken: config.indexToken,
          routeToken: config.routeToken,
       });
+
+   // 1-2. Discover + plan (throws only in strict mode / on global conflicts).
+   const discovery = discoverMounts(routesDir, { lenient, scaffold });
+   const plan = buildPlan(config, discovery.mounts, { lenient });
+   const warnings = [...discovery.warnings, ...plan.warnings];
+   const incomplete = [...discovery.incomplete];
+   const scaffolded = [...discovery.scaffolded];
+   const skippedMounts = discovery.skipped.length + plan.skippedMounts;
+
+   const sourceContent = new Map<string, string | undefined>();
+   const readSource = (filePath: string): string | undefined => {
+      if (!sourceContent.has(filePath)) sourceContent.set(filePath, readIfExists(filePath));
+      return sourceContent.get(filePath);
+   };
+
+   // 3. Compute literals. Each planned wrapper's literal is one of its source
+   //    file's mount ids; the source file's own (home) literal is another —
+   //    both derived by the same function, so there is exactly one id
+   //    derivation path. Ids are grouped per source file: home id first, then
+   //    wrapper ids in plan order.
+   const literals = plan.files.map((file) => ({
+      file,
+      routeIdLiteral: literalFor(file.targetPath),
+   }));
+   const mountIdsBySource = new Map<string, Array<string>>();
+   for (const { file, routeIdLiteral } of literals) {
+      let ids = mountIdsBySource.get(file.sourceFilePath);
+      if (ids === undefined) {
+         ids = [literalFor(file.sourceFilePath)];
+         mountIdsBySource.set(file.sourceFilePath, ids);
+      }
+      ids.push(routeIdLiteral);
+   }
+
+   // 4. Render desired wrapper content.
+   const desired = literals.map(({ file, routeIdLiteral }) => {
       const content = renderWrapper({
          kind: file.kind,
          routeIdLiteral,
          targetPath: file.targetPath,
-         sharedFilePath: file.sharedFilePath,
-         sourceLabel: rel(file.sharedFilePath),
+         sharedFilePath: file.sourceFilePath,
+         mountIds: mountIdsBySource.get(file.sourceFilePath) ?? [],
+         runtimeSpecifier: runtimeSpecifierFor(file.targetPath, runtimePath),
+         sourceLabel: rel(file.sourceFilePath),
          mountLabel: rel(file.mountFilePath),
          banner: config.banner,
       });
       return { file, routeIdLiteral, content };
    });
 
-   // 4b. Helpers: one `<base>.gen.tsx` sibling per shared ROUTE file (non-lazy),
-   //     parameterized by that file's route ids under EVERY mount of its shared
-   //     dir (nested-mount expansions included — one wrapper per mount, and each
-   //     wrapper's already-computed literal IS the mount id). Computed from the
-   //     FULL plan, before the shared-export gate: the helper must exist even
-   //     while its source file is still being authored.
-   const helperMountIds = new Map<string, Array<string>>();
-   for (const { file, routeIdLiteral } of desired) {
-      if (file.kind !== "wrapper") continue; // lazy shared files need no helper
-      const mountIds = helperMountIds.get(file.sharedFilePath) ?? [];
-      mountIds.push(routeIdLiteral);
-      helperMountIds.set(file.sharedFilePath, mountIds);
-   }
-   const desiredHelpers = [...helperMountIds.entries()]
-      .map(([sharedFilePath, mountIds]) => {
-         const helperPath = helperPathFor(sharedFilePath);
+   // 4b. `.gen` siblings: one per mounted SOURCE route file (non-lazy),
+   //     parameterized by that file's full id union (home id included).
+   //     Computed from the FULL plan, before the Route-export gate: the
+   //     sibling must exist even while its source file is still being
+   //     authored, so an `import { shared } from './x.gen'` the user adds
+   //     early always resolves.
+   const desiredHelpers = [...mountIdsBySource.entries()]
+      .filter(([sourceFilePath]) =>
+         plan.files.some(
+            (file) => file.sourceFilePath === sourceFilePath && file.kind === "wrapper",
+         ),
+      )
+      .map(([sourceFilePath, mountIds]) => {
+         const helperPath = helperPathFor(sourceFilePath);
          return {
             helperPath,
-            sharedFilePath,
+            sourceFilePath,
             content: renderHelper({
                mountIds,
-               sourceLabel: rel(sharedFilePath),
+               sourceLabel: rel(sourceFilePath),
                runtimeSpecifier: runtimeSpecifierFor(helperPath, runtimePath),
                banner: config.banner,
             }),
@@ -156,34 +155,32 @@ export function runPipeline(
       })
       .sort((a, b) => a.helperPath.localeCompare(b.helperPath));
 
-   // 4d. Runtime module: a single `sharedRoutes.gen.ts` next to the routes
-   //     directory — the user-land home of the createSharedRoute machinery
+   // 4c. Runtime module: a single `sharedRoutes.gen.ts` next to the routes
+   //     directory — the user-land home of the shared-route machinery
    //     (module augmentation of '@tanstack/react-router' binds to the app's
    //     copy — see emit-runtime.ts). Present only while a mount exists.
    const desiredRuntimes =
-      plan.sharedRoots.length > 0
+      plan.sourceRoots.length > 0
          ? [{ runtimePath, content: renderRuntimeModule(config.banner) }]
          : [];
 
-   // 4c. Shared-export gate: a wrapper imports `shared` (or `sharedLazy`) from
-   //     its source file, so emitting it before that export exists would break
-   //     the route tree on every save while the file is authored. Such wrappers
-   //     are deferred: not written this pass, but still desired (protected from
-   //     cleanup) — the source file EXISTS, it is just not finished yet.
+   // 4d. Route-export gate: a wrapper imports `Route` from its source file,
+   //     so emitting it before that export exists would break the route tree
+   //     on every save while the file is authored (the stock generator
+   //     scaffolds empty source files; until then they export nothing). Such
+   //     wrappers are deferred: not written this pass, but still desired
+   //     (protected from cleanup) — the source file EXISTS, it is just not
+   //     finished yet.
    const emitted: typeof desired = [];
    const notedUnready = new Set<string>();
    for (const entry of desired) {
-      const code = readShared(entry.file.sharedFilePath) ?? "";
-      const ready =
-         entry.file.kind === "wrapper-lazy" ? hasSharedLazyExport(code) : hasSharedExport(code);
-      if (ready) {
+      const code = readSource(entry.file.sourceFilePath) ?? "";
+      if (hasRouteExport(code)) {
          emitted.push(entry);
-      } else if (!notedUnready.has(entry.file.sharedFilePath)) {
-         notedUnready.add(entry.file.sharedFilePath);
+      } else if (!notedUnready.has(entry.file.sourceFilePath)) {
+         notedUnready.add(entry.file.sourceFilePath);
          incomplete.push(
-            `${rel(entry.file.sharedFilePath)} does not export \`${
-               entry.file.kind === "wrapper-lazy" ? "sharedLazy" : "shared"
-            }\` yet — wrapper not generated`,
+            `${rel(entry.file.sourceFilePath)} does not export \`Route\` yet — wrapper not generated`,
          );
       }
    }
@@ -231,8 +228,9 @@ export function runPipeline(
          unchanged++;
       }
    }
-   // Helpers and runtime modules hold no route-id literal for the stock
-   // generator to correct, so a plain byte compare replaces the masked diff.
+   // `.gen` siblings and runtime modules hold no route-id literal for the
+   // stock generator to correct, so a plain byte compare replaces the masked
+   // diff.
    for (const generated of [
       ...desiredHelpers.map((h) => ({ path: h.helperPath, content: h.content })),
       ...desiredRuntimes.map((r) => ({ path: r.runtimePath, content: r.content })),
@@ -246,31 +244,13 @@ export function runPipeline(
       }
    }
 
-   // 6b. Retarget factory imports: a shared file still importing the package
-   //     placeholder gets its specifier pointed at the now-existing `.gen`
-   //     sibling (the module specifier is the only thing touched — the same
-   //     class of in-place correction the stock generator applies to route-id
-   //     literals in user files).
-   const rewritten: Array<string> = [];
-   if (!check) {
-      for (const helper of desiredHelpers) {
-         const code = readShared(helper.sharedFilePath);
-         if (code === undefined) continue;
-         const next = rewriteToHelper(code, helper.sharedFilePath);
-         if (next !== undefined) {
-            fs.writeFileSync(helper.sharedFilePath, next, "utf8");
-            sharedContent.set(helper.sharedFilePath, next);
-            rewritten.push(rel(helper.sharedFilePath));
-         }
-      }
-   }
-
    // 7. Stale cleanup (manifest ∪ banner scan, banner re-confirmed at unlink).
-   //    Shared roots are banner-scanned for stale helpers but never pruned —
-   //    they are user directories this tool did not create. Deferred wrappers
-   //    count as desired: their source file exists, so they are not stale.
-   //    While any mount is skipped (mid-edit), cleanup is held entirely: files
-   //    of a temporarily broken mount must survive until it is valid again.
+   //    Source roots are banner-scanned for stale `.gen` siblings but never
+   //    pruned — they are user directories this tool did not create. Deferred
+   //    wrappers count as desired: their source file exists, so they are not
+   //    stale. While any mount is skipped (mid-edit), cleanup is held
+   //    entirely: files of a temporarily broken mount must survive until it
+   //    is valid again.
    const previousManifest = readManifest(manifestPath);
    const desiredPaths = new Set(desired.map(({ file }) => file.targetPath));
    for (const helper of desiredHelpers) desiredPaths.add(helper.helperPath);
@@ -282,31 +262,10 @@ export function runPipeline(
            root,
            manifest: previousManifest,
            currentTargetDirs: plan.targetDirs,
-           extraScanDirs: plan.sharedRoots,
+           extraScanDirs: plan.sourceRoots,
            desiredPaths,
            dryRun: check,
         });
-
-   // 7b. Un-mounting must not leave red imports behind: when a helper was
-   //     cleaned up, point the sibling source file's factory import back at
-   //     the package placeholder.
-   if (!check) {
-      for (const deletedPath of deleted) {
-         if (!/\.gen\.tsx$/.test(deletedPath)) continue;
-         const base = deletedPath.replace(/\.gen\.tsx$/, "");
-         for (const ext of [".tsx", ".ts", ".jsx", ".js"]) {
-            const sourcePath = `${base}${ext}`;
-            const code = readIfExists(sourcePath);
-            if (code === undefined) continue;
-            const next = rewriteToPackage(code);
-            if (next !== undefined) {
-               fs.writeFileSync(sourcePath, next, "utf8");
-               rewritten.push(rel(sourcePath));
-            }
-            break;
-         }
-      }
-   }
 
    // 8. New manifest: desired files + every directory we own. While cleanup is
    //    held, entries for skipped mounts are carried over from the previous
@@ -329,13 +288,13 @@ export function runPipeline(
             path: rel(file.targetPath),
             role: "wrapper",
             mount: rel(file.mountFilePath),
-            source: rel(file.sharedFilePath),
+            source: rel(file.sourceFilePath),
             hash: maskedHash(finalContent.get(file.targetPath) ?? ""),
          })),
          ...desiredHelpers.map((helper): ManifestFileEntry => ({
             path: rel(helper.helperPath),
             role: "helper",
-            source: rel(helper.sharedFilePath),
+            source: rel(helper.sourceFilePath),
             hash: maskedHash(helper.content),
          })),
          ...desiredRuntimes.map((runtime): ManifestFileEntry => ({
@@ -361,20 +320,26 @@ export function runPipeline(
       enabled: config.gitignore,
       entries: [
          ...plan.targetDirs.map((dir) => `${rel(dir)}/`),
-         ...plan.sharedRoots.map((dir) => `${rel(dir)}/**/*.gen.*`),
+         ...plan.sourceRoots.map((dir) => `${rel(dir)}/**/*.gen.*`),
          ...desiredRuntimes.map((runtime) => rel(runtime.runtimePath)),
       ],
       dryRun: check,
    });
 
    // 10. tsr.config.json: while any mount file exists, its
-   //     routeFileIgnorePattern must cover *.mount.ts files — that file is
+   //     routeFileIgnorePattern must cover *.mount.ts files and the `.gen`
+   //     siblings (both live inside the routes directory) — that file is
    //     read by both the tsr CLI and TanStack's vite plugin, so this is the
    //     one place the pattern needs to live.
    if (discovery.mounts.length > 0 || discovery.skipped.length > 0) {
       const tsrUpdate = ensureTsrConfig(root, check);
       if (tsrUpdate.changed) written.push(TSR_CONFIG_FILE);
       if (tsrUpdate.warning !== undefined) warnings.push(tsrUpdate.warning);
+   }
+
+   const wrappersBySource: Record<string, Array<string>> = {};
+   for (const file of plan.files) {
+      (wrappersBySource[file.sourceFilePath] ??= []).push(file.targetPath);
    }
 
    written.sort();
@@ -387,9 +352,9 @@ export function runPipeline(
       errors: warnings,
       incomplete,
       scaffolded: scaffolded.map(rel).sort(),
-      rewritten: rewritten.sort(),
-      sharedRoots: plan.sharedRoots,
+      sourceRoots: plan.sourceRoots,
       targetDirs: plan.targetDirs,
+      wrappersBySource,
    };
 }
 

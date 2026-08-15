@@ -10,23 +10,27 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as FinancesRouteRouteImport } from './routes/finances/route'
+import { Route as HelpRouteRouteImport } from './routes/help/route'
 import { Route as InventoryRouteRouteImport } from './routes/inventory/route'
-import { Route as FinancesProvidersIndexRouteImport } from './routes/finances/providers/index'
-import { Route as FinancesProvidersProviderIdRouteImport } from './routes/finances/providers/$providerId'
-import { Route as FinancesProvidersChartRouteImport } from './routes/finances/providers/chart'
-import { Route as InventoryProvidersIndexRouteImport } from './routes/inventory/providers/index'
-import { Route as InventoryProvidersProviderIdRouteImport } from './routes/inventory/providers/$providerId'
-import { Route as InventoryProvidersChartRouteImport } from './routes/inventory/providers/chart'
+import { Route as RequiredSearchRouteImport } from './routes/required-search'
+import { Route as HelpTopicIdRouteImport } from './routes/help/$topicId'
+import { Route as HelpChartRouteImport } from './routes/help/chart'
+import { Route as InventoryHelpRouteRouteImport } from './routes/inventory/help/route'
+import { Route as InventoryStockRouteImport } from './routes/inventory/stock'
+import { Route as HelpGuidesFaqRouteImport } from './routes/help/guides/faq'
+import { Route as InventoryHelpTopicIdRouteImport } from './routes/inventory/help/$topicId'
+import { Route as InventoryHelpChartRouteImport } from './routes/inventory/help/chart'
+import { Route as SettingsGuidesFaqRouteImport } from './routes/settings/guides/faq'
+import { Route as InventoryHelpGuidesFaqRouteImport } from './routes/inventory/help/guides/faq'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FinancesRouteRoute = FinancesRouteRouteImport.update({
-  id: '/finances',
-  path: '/finances',
+const HelpRouteRoute = HelpRouteRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryRouteRoute = InventoryRouteRouteImport.update({
@@ -34,117 +38,159 @@ const InventoryRouteRoute = InventoryRouteRouteImport.update({
   path: '/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FinancesProvidersIndexRoute = FinancesProvidersIndexRouteImport.update({
-  id: '/providers/',
-  path: '/providers/',
-  getParentRoute: () => FinancesRouteRoute,
+const RequiredSearchRoute = RequiredSearchRouteImport.update({
+  id: '/required-search',
+  path: '/required-search',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const FinancesProvidersProviderIdRoute =
-  FinancesProvidersProviderIdRouteImport.update({
-    id: '/providers/$providerId',
-    path: '/providers/$providerId',
-    getParentRoute: () => FinancesRouteRoute,
-  } as any)
-const FinancesProvidersChartRoute = FinancesProvidersChartRouteImport.update({
-  id: '/providers/chart',
-  path: '/providers/chart',
-  getParentRoute: () => FinancesRouteRoute,
-} as any).lazy(() =>
-  import('./routes/finances/providers/chart.lazy').then((d) => d.Route),
-)
-const InventoryProvidersIndexRoute = InventoryProvidersIndexRouteImport.update({
-  id: '/providers/',
-  path: '/providers/',
+const HelpTopicIdRoute = HelpTopicIdRouteImport.update({
+  id: '/$topicId',
+  path: '/$topicId',
+  getParentRoute: () => HelpRouteRoute,
+} as any)
+const HelpChartRoute = HelpChartRouteImport.update({
+  id: '/chart',
+  path: '/chart',
+  getParentRoute: () => HelpRouteRoute,
+} as any).lazy(() => import('./routes/help/chart.lazy').then((d) => d.Route))
+const InventoryHelpRouteRoute = InventoryHelpRouteRouteImport.update({
+  id: '/help',
+  path: '/help',
   getParentRoute: () => InventoryRouteRoute,
 } as any)
-const InventoryProvidersProviderIdRoute =
-  InventoryProvidersProviderIdRouteImport.update({
-    id: '/providers/$providerId',
-    path: '/providers/$providerId',
-    getParentRoute: () => InventoryRouteRoute,
-  } as any)
-const InventoryProvidersChartRoute = InventoryProvidersChartRouteImport.update({
-  id: '/providers/chart',
-  path: '/providers/chart',
+const InventoryStockRoute = InventoryStockRouteImport.update({
+  id: '/stock',
+  path: '/stock',
   getParentRoute: () => InventoryRouteRoute,
+} as any)
+const HelpGuidesFaqRoute = HelpGuidesFaqRouteImport.update({
+  id: '/guides/faq',
+  path: '/guides/faq',
+  getParentRoute: () => HelpRouteRoute,
+} as any)
+const InventoryHelpTopicIdRoute = InventoryHelpTopicIdRouteImport.update({
+  id: '/$topicId',
+  path: '/$topicId',
+  getParentRoute: () => InventoryHelpRouteRoute,
+} as any)
+const InventoryHelpChartRoute = InventoryHelpChartRouteImport.update({
+  id: '/chart',
+  path: '/chart',
+  getParentRoute: () => InventoryHelpRouteRoute,
 } as any).lazy(() =>
-  import('./routes/inventory/providers/chart.lazy').then((d) => d.Route),
+  import('./routes/inventory/help/chart.lazy').then((d) => d.Route),
 )
+const SettingsGuidesFaqRoute = SettingsGuidesFaqRouteImport.update({
+  id: '/settings/guides/faq',
+  path: '/settings/guides/faq',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryHelpGuidesFaqRoute = InventoryHelpGuidesFaqRouteImport.update({
+  id: '/guides/faq',
+  path: '/guides/faq',
+  getParentRoute: () => InventoryHelpRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/finances': typeof FinancesRouteRouteWithChildren
+  '/help': typeof HelpRouteRouteWithChildren
   '/inventory': typeof InventoryRouteRouteWithChildren
-  '/finances/providers/$providerId': typeof FinancesProvidersProviderIdRoute
-  '/finances/providers/chart': typeof FinancesProvidersChartRoute
-  '/inventory/providers/$providerId': typeof InventoryProvidersProviderIdRoute
-  '/inventory/providers/chart': typeof InventoryProvidersChartRoute
-  '/finances/providers/': typeof FinancesProvidersIndexRoute
-  '/inventory/providers/': typeof InventoryProvidersIndexRoute
+  '/required-search': typeof RequiredSearchRoute
+  '/inventory/help': typeof InventoryHelpRouteRouteWithChildren
+  '/help/$topicId': typeof HelpTopicIdRoute
+  '/help/chart': typeof HelpChartRoute
+  '/inventory/stock': typeof InventoryStockRoute
+  '/help/guides/faq': typeof HelpGuidesFaqRoute
+  '/inventory/help/$topicId': typeof InventoryHelpTopicIdRoute
+  '/inventory/help/chart': typeof InventoryHelpChartRoute
+  '/settings/guides/faq': typeof SettingsGuidesFaqRoute
+  '/inventory/help/guides/faq': typeof InventoryHelpGuidesFaqRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/finances': typeof FinancesRouteRouteWithChildren
+  '/help': typeof HelpRouteRouteWithChildren
   '/inventory': typeof InventoryRouteRouteWithChildren
-  '/finances/providers/$providerId': typeof FinancesProvidersProviderIdRoute
-  '/finances/providers/chart': typeof FinancesProvidersChartRoute
-  '/inventory/providers/$providerId': typeof InventoryProvidersProviderIdRoute
-  '/inventory/providers/chart': typeof InventoryProvidersChartRoute
-  '/finances/providers': typeof FinancesProvidersIndexRoute
-  '/inventory/providers': typeof InventoryProvidersIndexRoute
+  '/required-search': typeof RequiredSearchRoute
+  '/inventory/help': typeof InventoryHelpRouteRouteWithChildren
+  '/help/$topicId': typeof HelpTopicIdRoute
+  '/help/chart': typeof HelpChartRoute
+  '/inventory/stock': typeof InventoryStockRoute
+  '/help/guides/faq': typeof HelpGuidesFaqRoute
+  '/inventory/help/$topicId': typeof InventoryHelpTopicIdRoute
+  '/inventory/help/chart': typeof InventoryHelpChartRoute
+  '/settings/guides/faq': typeof SettingsGuidesFaqRoute
+  '/inventory/help/guides/faq': typeof InventoryHelpGuidesFaqRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/finances': typeof FinancesRouteRouteWithChildren
+  '/help': typeof HelpRouteRouteWithChildren
   '/inventory': typeof InventoryRouteRouteWithChildren
-  '/finances/providers/$providerId': typeof FinancesProvidersProviderIdRoute
-  '/finances/providers/chart': typeof FinancesProvidersChartRoute
-  '/inventory/providers/$providerId': typeof InventoryProvidersProviderIdRoute
-  '/inventory/providers/chart': typeof InventoryProvidersChartRoute
-  '/finances/providers/': typeof FinancesProvidersIndexRoute
-  '/inventory/providers/': typeof InventoryProvidersIndexRoute
+  '/required-search': typeof RequiredSearchRoute
+  '/inventory/help': typeof InventoryHelpRouteRouteWithChildren
+  '/help/$topicId': typeof HelpTopicIdRoute
+  '/help/chart': typeof HelpChartRoute
+  '/inventory/stock': typeof InventoryStockRoute
+  '/help/guides/faq': typeof HelpGuidesFaqRoute
+  '/inventory/help/$topicId': typeof InventoryHelpTopicIdRoute
+  '/inventory/help/chart': typeof InventoryHelpChartRoute
+  '/settings/guides/faq': typeof SettingsGuidesFaqRoute
+  '/inventory/help/guides/faq': typeof InventoryHelpGuidesFaqRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/finances'
+    | '/help'
     | '/inventory'
-    | '/finances/providers/$providerId'
-    | '/finances/providers/chart'
-    | '/inventory/providers/$providerId'
-    | '/inventory/providers/chart'
-    | '/finances/providers/'
-    | '/inventory/providers/'
+    | '/required-search'
+    | '/inventory/help'
+    | '/help/$topicId'
+    | '/help/chart'
+    | '/inventory/stock'
+    | '/help/guides/faq'
+    | '/inventory/help/$topicId'
+    | '/inventory/help/chart'
+    | '/settings/guides/faq'
+    | '/inventory/help/guides/faq'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/finances'
+    | '/help'
     | '/inventory'
-    | '/finances/providers/$providerId'
-    | '/finances/providers/chart'
-    | '/inventory/providers/$providerId'
-    | '/inventory/providers/chart'
-    | '/finances/providers'
-    | '/inventory/providers'
+    | '/required-search'
+    | '/inventory/help'
+    | '/help/$topicId'
+    | '/help/chart'
+    | '/inventory/stock'
+    | '/help/guides/faq'
+    | '/inventory/help/$topicId'
+    | '/inventory/help/chart'
+    | '/settings/guides/faq'
+    | '/inventory/help/guides/faq'
   id:
     | '__root__'
     | '/'
-    | '/finances'
+    | '/help'
     | '/inventory'
-    | '/finances/providers/$providerId'
-    | '/finances/providers/chart'
-    | '/inventory/providers/$providerId'
-    | '/inventory/providers/chart'
-    | '/finances/providers/'
-    | '/inventory/providers/'
+    | '/required-search'
+    | '/inventory/help'
+    | '/help/$topicId'
+    | '/help/chart'
+    | '/inventory/stock'
+    | '/help/guides/faq'
+    | '/inventory/help/$topicId'
+    | '/inventory/help/chart'
+    | '/settings/guides/faq'
+    | '/inventory/help/guides/faq'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  FinancesRouteRoute: typeof FinancesRouteRouteWithChildren
+  HelpRouteRoute: typeof HelpRouteRouteWithChildren
   InventoryRouteRoute: typeof InventoryRouteRouteWithChildren
+  RequiredSearchRoute: typeof RequiredSearchRoute
+  SettingsGuidesFaqRoute: typeof SettingsGuidesFaqRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -156,11 +202,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/finances': {
-      id: '/finances'
-      path: '/finances'
-      fullPath: '/finances'
-      preLoaderRoute: typeof FinancesRouteRouteImport
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory': {
@@ -170,77 +216,118 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/finances/providers/': {
-      id: '/finances/providers/'
-      path: '/providers'
-      fullPath: '/finances/providers/'
-      preLoaderRoute: typeof FinancesProvidersIndexRouteImport
-      parentRoute: typeof FinancesRouteRoute
+    '/required-search': {
+      id: '/required-search'
+      path: '/required-search'
+      fullPath: '/required-search'
+      preLoaderRoute: typeof RequiredSearchRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/finances/providers/$providerId': {
-      id: '/finances/providers/$providerId'
-      path: '/providers/$providerId'
-      fullPath: '/finances/providers/$providerId'
-      preLoaderRoute: typeof FinancesProvidersProviderIdRouteImport
-      parentRoute: typeof FinancesRouteRoute
+    '/help/$topicId': {
+      id: '/help/$topicId'
+      path: '/$topicId'
+      fullPath: '/help/$topicId'
+      preLoaderRoute: typeof HelpTopicIdRouteImport
+      parentRoute: typeof HelpRouteRoute
     }
-    '/finances/providers/chart': {
-      id: '/finances/providers/chart'
-      path: '/providers/chart'
-      fullPath: '/finances/providers/chart'
-      preLoaderRoute: typeof FinancesProvidersChartRouteImport
-      parentRoute: typeof FinancesRouteRoute
+    '/help/chart': {
+      id: '/help/chart'
+      path: '/chart'
+      fullPath: '/help/chart'
+      preLoaderRoute: typeof HelpChartRouteImport
+      parentRoute: typeof HelpRouteRoute
     }
-    '/inventory/providers/': {
-      id: '/inventory/providers/'
-      path: '/providers'
-      fullPath: '/inventory/providers/'
-      preLoaderRoute: typeof InventoryProvidersIndexRouteImport
+    '/inventory/help': {
+      id: '/inventory/help'
+      path: '/help'
+      fullPath: '/inventory/help'
+      preLoaderRoute: typeof InventoryHelpRouteRouteImport
       parentRoute: typeof InventoryRouteRoute
     }
-    '/inventory/providers/$providerId': {
-      id: '/inventory/providers/$providerId'
-      path: '/providers/$providerId'
-      fullPath: '/inventory/providers/$providerId'
-      preLoaderRoute: typeof InventoryProvidersProviderIdRouteImport
+    '/inventory/stock': {
+      id: '/inventory/stock'
+      path: '/stock'
+      fullPath: '/inventory/stock'
+      preLoaderRoute: typeof InventoryStockRouteImport
       parentRoute: typeof InventoryRouteRoute
     }
-    '/inventory/providers/chart': {
-      id: '/inventory/providers/chart'
-      path: '/providers/chart'
-      fullPath: '/inventory/providers/chart'
-      preLoaderRoute: typeof InventoryProvidersChartRouteImport
-      parentRoute: typeof InventoryRouteRoute
+    '/help/guides/faq': {
+      id: '/help/guides/faq'
+      path: '/guides/faq'
+      fullPath: '/help/guides/faq'
+      preLoaderRoute: typeof HelpGuidesFaqRouteImport
+      parentRoute: typeof HelpRouteRoute
+    }
+    '/inventory/help/$topicId': {
+      id: '/inventory/help/$topicId'
+      path: '/$topicId'
+      fullPath: '/inventory/help/$topicId'
+      preLoaderRoute: typeof InventoryHelpTopicIdRouteImport
+      parentRoute: typeof InventoryHelpRouteRoute
+    }
+    '/inventory/help/chart': {
+      id: '/inventory/help/chart'
+      path: '/chart'
+      fullPath: '/inventory/help/chart'
+      preLoaderRoute: typeof InventoryHelpChartRouteImport
+      parentRoute: typeof InventoryHelpRouteRoute
+    }
+    '/settings/guides/faq': {
+      id: '/settings/guides/faq'
+      path: '/settings/guides/faq'
+      fullPath: '/settings/guides/faq'
+      preLoaderRoute: typeof SettingsGuidesFaqRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory/help/guides/faq': {
+      id: '/inventory/help/guides/faq'
+      path: '/guides/faq'
+      fullPath: '/inventory/help/guides/faq'
+      preLoaderRoute: typeof InventoryHelpGuidesFaqRouteImport
+      parentRoute: typeof InventoryHelpRouteRoute
     }
   }
 }
 
-interface FinancesRouteRouteChildren {
-  FinancesProvidersProviderIdRoute: typeof FinancesProvidersProviderIdRoute
-  FinancesProvidersChartRoute: typeof FinancesProvidersChartRoute
-  FinancesProvidersIndexRoute: typeof FinancesProvidersIndexRoute
+interface HelpRouteRouteChildren {
+  HelpTopicIdRoute: typeof HelpTopicIdRoute
+  HelpChartRoute: typeof HelpChartRoute
+  HelpGuidesFaqRoute: typeof HelpGuidesFaqRoute
 }
 
-const FinancesRouteRouteChildren: FinancesRouteRouteChildren = {
-  FinancesProvidersProviderIdRoute: FinancesProvidersProviderIdRoute,
-  FinancesProvidersChartRoute: FinancesProvidersChartRoute,
-  FinancesProvidersIndexRoute: FinancesProvidersIndexRoute,
+const HelpRouteRouteChildren: HelpRouteRouteChildren = {
+  HelpTopicIdRoute: HelpTopicIdRoute,
+  HelpChartRoute: HelpChartRoute,
+  HelpGuidesFaqRoute: HelpGuidesFaqRoute,
 }
 
-const FinancesRouteRouteWithChildren = FinancesRouteRoute._addFileChildren(
-  FinancesRouteRouteChildren,
+const HelpRouteRouteWithChildren = HelpRouteRoute._addFileChildren(
+  HelpRouteRouteChildren,
 )
 
+interface InventoryHelpRouteRouteChildren {
+  InventoryHelpTopicIdRoute: typeof InventoryHelpTopicIdRoute
+  InventoryHelpChartRoute: typeof InventoryHelpChartRoute
+  InventoryHelpGuidesFaqRoute: typeof InventoryHelpGuidesFaqRoute
+}
+
+const InventoryHelpRouteRouteChildren: InventoryHelpRouteRouteChildren = {
+  InventoryHelpTopicIdRoute: InventoryHelpTopicIdRoute,
+  InventoryHelpChartRoute: InventoryHelpChartRoute,
+  InventoryHelpGuidesFaqRoute: InventoryHelpGuidesFaqRoute,
+}
+
+const InventoryHelpRouteRouteWithChildren =
+  InventoryHelpRouteRoute._addFileChildren(InventoryHelpRouteRouteChildren)
+
 interface InventoryRouteRouteChildren {
-  InventoryProvidersProviderIdRoute: typeof InventoryProvidersProviderIdRoute
-  InventoryProvidersChartRoute: typeof InventoryProvidersChartRoute
-  InventoryProvidersIndexRoute: typeof InventoryProvidersIndexRoute
+  InventoryHelpRouteRoute: typeof InventoryHelpRouteRouteWithChildren
+  InventoryStockRoute: typeof InventoryStockRoute
 }
 
 const InventoryRouteRouteChildren: InventoryRouteRouteChildren = {
-  InventoryProvidersProviderIdRoute: InventoryProvidersProviderIdRoute,
-  InventoryProvidersChartRoute: InventoryProvidersChartRoute,
-  InventoryProvidersIndexRoute: InventoryProvidersIndexRoute,
+  InventoryHelpRouteRoute: InventoryHelpRouteRouteWithChildren,
+  InventoryStockRoute: InventoryStockRoute,
 }
 
 const InventoryRouteRouteWithChildren = InventoryRouteRoute._addFileChildren(
@@ -249,8 +336,10 @@ const InventoryRouteRouteWithChildren = InventoryRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  FinancesRouteRoute: FinancesRouteRouteWithChildren,
+  HelpRouteRoute: HelpRouteRouteWithChildren,
   InventoryRouteRoute: InventoryRouteRouteWithChildren,
+  RequiredSearchRoute: RequiredSearchRoute,
+  SettingsGuidesFaqRoute: SettingsGuidesFaqRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
