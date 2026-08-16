@@ -1,6 +1,6 @@
 import { Button } from "#/components/button.tsx";
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "#/components/dialog.tsx";
-import { createFileRoute,Outlet } from "@tanstack/react-router";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/dialog.tsx";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { shared } from "./route.gen";
 
 // A plain stock route: /home is its home mount; about/shared-one.mount.ts

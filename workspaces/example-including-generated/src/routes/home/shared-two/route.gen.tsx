@@ -7,9 +7,6 @@ import { makeSharedRoute } from "../../../sharedRoutes.gen";
 type MountFilePaths = "/home/shared-two" | "/about/shared-two";
 
 export const shared = makeSharedRoute<MountFilePaths>(
-  [
-  "/home/shared-two",
-  "/about/shared-two",
-  ],
-  "src/routes/home/shared-two/route",
+   ["/home/shared-two", "/about/shared-two"],
+   "src/routes/home/shared-two/route",
 );

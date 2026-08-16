@@ -1,4 +1,4 @@
-import { Dialog,DialogContent,DialogHeader,DialogTitle } from "#/components/dialog.tsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/dialog.tsx";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/home/shared-two")({
