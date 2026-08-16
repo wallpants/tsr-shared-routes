@@ -90,6 +90,7 @@ Converting an existing route into a shared one therefore costs nothing up front:
 - **Escaping the subtree**: the union navigate accepts a relative target that is valid under **at least one** mount (ANY-mount semantics — a target that only exists under one mount typechecks but not-founds under the others at runtime). Prefer isomorphic escapes (targets that exist under every mount, like `'../..'`) or absolute paths, which are stock-typed and mount-independent. The stock `Route.useNavigate()` is home-typed and therefore stricter: it only accepts escapes valid at home.
 - **JSX links**: stock `Link` without `from` accepts only the bare `'.'` and `'..'` (resolved from the current leaf location at runtime). Any structured relative target (`'./$childId'`) needs a `from`, and a static `from` would be wrong under other mounts — use `shared.Link`, which resolves the current mount and passes it as `from`.
 - **Index routes**: `'..'` from an index route resolves to the layout's **parent** — the trailing index segment does not count as a level (stock semantics, verified at both the type and runtime level).
+- **Escape lint**: the codegen scans mounted source files for string-literal relative targets and warns when one resolves to an existing route under some mounts but not all (the exact gap ANY-mount typing cannot catch). Literals only — computed targets are not checked.
 
 ## Overlapping mounts
 

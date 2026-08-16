@@ -9,4 +9,4 @@ patchSharedHooks(sharedLazy, ['/help/chart', '/inventory/help/chart'])
 
 const { id: _id, ...lazyOptions } = sharedLazy.options
 
-export const Route = createLazyFileRoute('/inventory/help/chart')(lazyOptions)
+export const Route = createLazyFileRoute('/inventory/help/chart')({ ...lazyOptions })

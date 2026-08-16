@@ -11,6 +11,8 @@ patchSharedHooks(shared, ['/home/shared-one', '/about/shared-one'])
 
 type T = SourceRouteTypes<typeof shared>
 
+const { id: _id, path: _path, getParentRoute: _getParentRoute, ...sourceOptions } = shared.options as any
+
 export const Route = createFileRoute('/about/shared-one')<
   Register,
   T['searchValidator'],
@@ -23,4 +25,4 @@ export const Route = createFileRoute('/about/shared-one')<
   T['ssr'],
   T['middlewares'],
   T['handlers']
->({ ...shared.options } as any)
+>({ ...sourceOptions })

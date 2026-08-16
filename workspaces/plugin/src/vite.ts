@@ -4,6 +4,7 @@ import type { Plugin } from "vite";
 import type { SharedRoutesConfig, SharedRoutesUserConfig } from "./config";
 import { resolveConfig } from "./config";
 import { isMountFile } from "./core/discover";
+import { runtimeModulePath } from "./core/emit-runtime";
 import type { PipelineSummary } from "./core/pipeline";
 import { runPipeline } from "./core/pipeline";
 import { GEN_FILE_RE } from "./core/scan-source";
@@ -12,6 +13,25 @@ export type { SharedRoutesUserConfig } from "./config";
 
 /** Debounce window for watcher-triggered pipeline re-runs. */
 const RERUN_DEBOUNCE_MS = 50;
+
+/** Custom HMR event carrying lint findings to the browser console. */
+const LINT_EVENT = "tsr-shared-routes:lint";
+const LINT_CONNECT_EVENT = "tsr-shared-routes:lint-connected";
+
+/**
+ * Appended to the served `sharedRoutes.gen.ts` (dev only, never on disk):
+ * every wrapper imports that module, so this listener is always in the
+ * client graph and surfaces lint findings in the browser console alongside
+ * TanStack's own warnings. Inert in SSR/prod (no `import.meta.hot`).
+ */
+const LINT_CLIENT_SNIPPET = `
+if (import.meta.hot) {
+  import.meta.hot.on(${JSON.stringify(LINT_EVENT)}, (messages) => {
+    for (const message of messages) console.warn('[tsr-shared-routes] ' + message)
+  })
+  import.meta.hot.send(${JSON.stringify(LINT_CONNECT_EVENT)})
+}
+`;
 
 /** True when `child` is inside (or equal to) `parent`. Both absolute. */
 function isWithin(parent: string, child: string): boolean {
@@ -33,10 +53,13 @@ function formatError(error: unknown): string {
 export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
    let resolved: SharedRoutesConfig | undefined;
    let routesDir = "";
+   let runtimePath = "";
+   let isServe = false;
    let sourceRoots: Array<string> = [];
    let targetDirs: Array<string> = [];
    let wrappersBySource: Record<string, Array<string>> = {};
-   let hasDeferred = false;
+   let lintWarnings: Array<string> = [];
+   let broadcastLint: (() => void) | undefined;
    let pendingWarnings: Array<string> = [];
 
    const applySummary = (
@@ -46,16 +69,14 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
       sourceRoots = summary.sourceRoots;
       targetDirs = summary.targetDirs;
       wrappersBySource = summary.wrappersBySource;
-      // While any wrapper is deferred on a missing `Route` export, plain
-      // content edits become relevant: the save that adds the export only
-      // fires a `change` event.
-      hasDeferred = summary.incomplete.some((line) => line.includes("does not export"));
+      lintWarnings = summary.lintWarnings;
       const lines = summary.errors.map((warning) => `tsr-shared-routes: ${warning}`);
       if (logger === undefined) {
          pendingWarnings = lines; // no logger yet in the config hook — defer
       } else {
          for (const line of lines) logger.warn(line, { timestamp: true });
       }
+      broadcastLint?.();
    };
 
    /**
@@ -109,11 +130,21 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
          return [...merged];
       },
 
-      async config(viteConfig) {
+      async config(viteConfig, env) {
          const root = path.resolve(viteConfig.root ?? process.cwd());
          resolved = resolveConfig(userConfig, root);
          routesDir = path.resolve(root, resolved.routesDirectory);
+         runtimePath = runtimeModulePath(routesDir);
+         isServe = env.command === "serve";
          applySummary(runPipeline(resolved, { lenient: true }));
+      },
+
+      // Dev only: append the lint console listener to the served runtime
+      // module (never written to disk).
+      transform(code, id) {
+         if (!isServe) return;
+         if (path.resolve(id.split("?")[0] ?? id) !== runtimePath) return;
+         return { code: code + LINT_CLIENT_SNIPPET, map: null };
       },
 
       configResolved(viteConfig) {
@@ -133,6 +164,26 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
          // itself still watches them, so the stock generator picks our
          // wrapper writes up — desired.)
          server.watcher.add(routesDir);
+
+         // Lint findings → browser console. Broadcast on change after each
+         // pipeline run; late-connecting clients pull the current state via
+         // the connect event the served runtime module sends.
+         let lastBroadcast = "";
+         const sendLint = (client?: { send: (payload: never) => void }): void => {
+            if (lintWarnings.length === 0) return;
+            const payload = { type: "custom", event: LINT_EVENT, data: lintWarnings };
+            (client ?? server.ws).send(payload as never);
+         };
+         server.ws.on(LINT_CONNECT_EVENT, (_: unknown, client: { send: (p: never) => void }) =>
+            sendLint(client),
+         );
+         broadcastLint = () => {
+            const serialized = JSON.stringify(lintWarnings);
+            if (serialized === lastBroadcast) return;
+            lastBroadcast = serialized;
+            sendLint();
+         };
+         broadcastLint();
 
          let timer: ReturnType<typeof setTimeout> | undefined;
          let running = false;
@@ -176,10 +227,7 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
             // Any event on a mount file changes the plan.
             if (isMountFile(absPath)) return true;
             // Structure changes (files entering/leaving mounted subtrees, new
-            // directories) change the plan; plain content edits flow through
-            // HMR — except while a wrapper is deferred on a missing `Route`
-            // export, where the resolving save is a `change` event on a
-            // source file.
+            // directories) change the plan.
             if (
                event === "add" ||
                event === "unlink" ||
@@ -188,11 +236,10 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
             ) {
                return true;
             }
-            return (
-               event === "change" &&
-               hasDeferred &&
-               sourceRoots.some((dir) => isWithin(dir, absPath))
-            );
+            // Content edits on MOUNTED source files matter too: the
+            // Route-export gate and the relative-escape lint both read file
+            // content. Plain routes outside mounted subtrees stay HMR-only.
+            return event === "change" && sourceRoots.some((dir) => isWithin(dir, absPath));
          };
 
          server.watcher.on("all", (event, file) => {

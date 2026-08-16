@@ -52,6 +52,11 @@ export function renderWrapper(spec: WrapperSpec): string {
    const idList = [...new Set(spec.mountIds)].map((id) => `'${id}'`).join(", ");
    const header = `${spec.banner}\n/* eslint-disable */\n// source: ${spec.sourceLabel} (mount: ${spec.mountLabel})\n`;
 
+   // Both option arguments below are PLAIN object literals on purpose:
+   // TanStack's vite transform only injects its route HMR accept code when
+   // the options argument is an ObjectExpression, and that injection is what
+   // lets a wrapper hot-re-execute (re-patching the source Route) instead of
+   // forcing a full page reload when a mounted source file changes.
    if (spec.kind === "wrapper-lazy") {
       return (
          header +
@@ -63,7 +68,7 @@ export function renderWrapper(spec: WrapperSpec): string {
          `\n` +
          `const { id: _id, ...lazyOptions } = sharedLazy.options\n` +
          `\n` +
-         `export const Route = createLazyFileRoute('${spec.routeIdLiteral}')(lazyOptions)\n`
+         `export const Route = createLazyFileRoute('${spec.routeIdLiteral}')({ ...lazyOptions })\n`
       );
    }
 
@@ -79,6 +84,12 @@ export function renderWrapper(spec: WrapperSpec): string {
       `\n` +
       `type T = SourceRouteTypes<typeof shared>\n` +
       `\n` +
+      // The stripped keys are the "generated" route options the router's
+      // .update() (and TanStack's HMR handleRouteUpdate) merge into the live
+      // source route's options — they belong to the HOME mount and must not
+      // leak into the wrapper's createFileRoute call (id+path together throw).
+      `const { id: _id, path: _path, getParentRoute: _getParentRoute, ...sourceOptions } = shared.options as any\n` +
+      `\n` +
       `export const Route = createFileRoute('${spec.routeIdLiteral}')<\n` +
       `  Register,\n` +
       `  T['searchValidator'],\n` +
@@ -91,7 +102,7 @@ export function renderWrapper(spec: WrapperSpec): string {
       `  T['ssr'],\n` +
       `  T['middlewares'],\n` +
       `  T['handlers']\n` +
-      `>({ ...shared.options } as any)\n`
+      `>({ ...sourceOptions })\n`
    );
 }
 

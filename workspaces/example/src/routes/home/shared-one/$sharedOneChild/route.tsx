@@ -1,7 +1,7 @@
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/dialog.tsx";
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "#/components/dialog.tsx";
 import { shared } from "./route.gen";
 
 const loader = createServerFn({ method: "GET" })

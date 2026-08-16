@@ -7,6 +7,8 @@ import { decideWrite, renderWrapper } from "./emit-wrapper";
 import { SharedRoutesError } from "./errors";
 import { atomicWrite, isOwned, maskedHash, readIfExists } from "./fsio";
 import { updateGitignore } from "./gitignore";
+import type { EscapeLintFile } from "./lint-escapes";
+import { collectRouteFiles, lintRelativeEscapes } from "./lint-escapes";
 import type { Manifest, ManifestFileEntry } from "./manifest";
 import { cleanupStale, readManifest, writeManifest } from "./manifest";
 import { buildPlan } from "./plan";
@@ -40,6 +42,11 @@ export interface PipelineSummary {
     * before React re-renders.
     */
    wrappersBySource: Record<string, Array<string>>;
+   /**
+    * Relative-escape lint findings (also included in `errors`). Kept separate
+    * so the vite plugin can broadcast them to the browser console.
+    */
+   lintWarnings: Array<string>;
 }
 
 export interface PipelineOptions {
@@ -184,6 +191,22 @@ export function runPipeline(
          );
       }
    }
+
+   // 4e. Relative-escape lint: warn about '.'-prefixed `to` literals in
+   //     mounted source files that resolve to a route under SOME mounts but
+   //     not all — the union types are ANY-mount for escapes, so these
+   //     typecheck yet not-found at runtime under the mounts they miss.
+   const routeIdSet = new Set<string>(literals.map((entry) => entry.routeIdLiteral));
+   for (const routeFile of collectRouteFiles(routesDir, config.routeFileIgnorePrefix)) {
+      routeIdSet.add(literalFor(routeFile));
+   }
+   const lintFiles: Array<EscapeLintFile> = [];
+   for (const [sourceFilePath, baseIds] of mountIdsBySource) {
+      const code = readSource(sourceFilePath);
+      if (code !== undefined) lintFiles.push({ label: rel(sourceFilePath), code, baseIds });
+   }
+   const lintWarnings = lintRelativeEscapes(lintFiles, routeIdSet);
+   warnings.push(...lintWarnings);
 
    // 5. Ownership pre-check on every emitted target before any write happens.
    const existingByPath = new Map<string, string | undefined>();
@@ -355,6 +378,7 @@ export function runPipeline(
       sourceRoots: plan.sourceRoots,
       targetDirs: plan.targetDirs,
       wrappersBySource,
+      lintWarnings,
    };
 }
 

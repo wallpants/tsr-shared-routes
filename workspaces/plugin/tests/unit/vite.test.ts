@@ -37,16 +37,22 @@ interface FakeServer {
    server: {
       config: { logger: { warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> } };
       watcher: { add: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> };
+      ws: { send: ReturnType<typeof vi.fn>; on: ReturnType<typeof vi.fn> };
    };
    emit: (event: string, file: string) => void;
+   /** Fires a custom ws event registered via server.ws.on. */
+   emitWs: (event: string, data: unknown, client: { send: (payload: never) => void }) => void;
    watched: Array<string>;
    errors: Array<string>;
+   wsSent: Array<unknown>;
 }
 
 function makeFakeServer(): FakeServer {
    const listeners: Array<(event: string, file: string) => void> = [];
+   const wsListeners = new Map<string, (data: unknown, client: unknown) => void>();
    const watched: Array<string> = [];
    const errors: Array<string> = [];
+   const wsSent: Array<unknown> = [];
    const server = {
       config: {
          logger: {
@@ -60,14 +66,24 @@ function makeFakeServer(): FakeServer {
             if (event === "all") listeners.push(cb);
          }),
       },
+      ws: {
+         send: vi.fn((payload: unknown) => wsSent.push(payload)),
+         on: vi.fn((event: string, cb: (data: unknown, client: unknown) => void) => {
+            wsListeners.set(event, cb);
+         }),
+      },
    };
    return {
       server,
       emit: (event, file) => {
          for (const listener of listeners) listener(event, file);
       },
+      emitWs: (event, data, client) => {
+         wsListeners.get(event)?.(data, client);
+      },
       watched,
       errors,
+      wsSent,
    };
 }
 
@@ -124,24 +140,31 @@ describe("sharedRoutes vite plugin", () => {
       expect(exists(path.join(root, "src/routes/inventory/help/route.tsx"))).toBe(true);
    });
 
-   it("re-runs on mount-file changes, ignores plain content edits when nothing is deferred", async () => {
+   it("re-runs on mounted-source content edits, ignores edits to unmounted routes", async () => {
       const root = makeFixture();
+      writeTree(root, { "src/routes/plain.tsx": stockRouteSource("/plain") });
       const plugin = sharedRoutes();
       await callConfig(plugin, root);
       const fake = makeFakeServer();
       callConfigureServer(plugin, fake);
 
-      // Content-only change to a source route file: no codegen (wrapper mtime stable).
-      const sourceFile = path.join(root, "src", "routes", "help", "route.tsx");
       const wrapper = path.join(root, "src", "routes", "inventory", "help", "route.tsx");
+
+      // Content edit to an UNMOUNTED route file: no codegen (wrapper stays gone).
       fs.rmSync(wrapper); // if a rerun happens it would come back
-      fake.emit("change", sourceFile);
+      fake.emit("change", path.join(root, "src", "routes", "plain.tsx"));
       await settle();
       expect(exists(wrapper)).toBe(false);
 
-      // Mount file event: rerun (wrapper reappears).
-      const mountFile = path.join(root, "src", "routes", "inventory", "help.mount.ts");
-      fake.emit("change", mountFile);
+      // Content edit to a MOUNTED source file: rerun (the Route-export gate
+      // and the escape lint read content), wrapper reappears.
+      fake.emit("change", path.join(root, "src", "routes", "help", "route.tsx"));
+      await settle();
+      expect(exists(wrapper)).toBe(true);
+
+      // Mount file event: rerun too.
+      fs.rmSync(wrapper);
+      fake.emit("change", path.join(root, "src", "routes", "inventory", "help.mount.ts"));
       await settle();
       expect(exists(wrapper)).toBe(true);
    });
@@ -205,6 +228,56 @@ describe("sharedRoutes vite plugin", () => {
       expect(fake.errors).toHaveLength(1);
       expect(fake.errors[0]).toContain("tsr-shared-routes");
       expect(readFile(wrapper)).toBe("// my own file\n"); // untouched, server alive
+   });
+
+   it("appends the lint console listener to the served runtime module only", async () => {
+      const root = makeFixture();
+      const plugin = sharedRoutes();
+      await callConfig(plugin, root);
+
+      const hook = plugin.transform as unknown;
+      const handler = (
+         typeof hook === "function" ? hook : (hook as { handler: unknown }).handler
+      ) as (this: unknown, code: string, id: string) => { code: string } | undefined;
+
+      const runtime = handler.call({}, "// runtime", path.join(root, "src/sharedRoutes.gen.ts"));
+      expect(runtime?.code).toContain("import.meta.hot.on");
+      expect(runtime?.code).toContain("tsr-shared-routes:lint");
+
+      const other = handler.call({}, "// other", path.join(root, "src/routes/help/route.tsx"));
+      expect(other).toBeUndefined();
+   });
+
+   it("broadcasts lint findings over the ws channel and replies to late clients", async () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/help/$topicId.tsx": `${stockRouteSource("/help/$topicId")}const go = { to: '../../stock' }\n`,
+         "src/routes/inventory/stock.tsx": stockRouteSource("/inventory/stock"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+      });
+      const plugin = sharedRoutes();
+      await callConfig(plugin, root);
+      const fake = makeFakeServer();
+      callConfigureServer(plugin, fake);
+
+      // broadcast on server start (findings exist from the config-hook run)
+      expect(fake.wsSent).toHaveLength(1);
+      const payload = fake.wsSent[0] as { event: string; data: Array<string> };
+      expect(payload.event).toBe("tsr-shared-routes:lint");
+      expect(payload.data[0]).toContain("'../../stock'");
+
+      // a late-connecting client gets the current findings directly
+      const clientSent: Array<unknown> = [];
+      fake.emitWs("tsr-shared-routes:lint-connected", undefined, {
+         send: ((p: unknown) => clientSent.push(p)) as never,
+      });
+      expect(clientSent).toHaveLength(1);
+
+      // unchanged findings are not re-broadcast on subsequent reruns
+      const mountFile = path.join(root, "src", "routes", "inventory", "help.mount.ts");
+      fake.emit("change", mountFile);
+      await settle();
+      expect(fake.wsSent).toHaveLength(1);
    });
 
    it("pulls wrapper modules into the HMR batch when a mounted source file updates", async () => {

@@ -22,7 +22,6 @@ function Component() {
                   <DialogTitle>Shared One</DialogTitle>
                </DialogHeader>
                <p className="text-5xl">Shared One Route</p>
-               <p>Hello world</p>
                <Button
                   nativeButton={false}
                   render={

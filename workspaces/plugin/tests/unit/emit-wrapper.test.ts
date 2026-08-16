@@ -57,6 +57,8 @@ patchSharedHooks(shared, ['/help/$topicId', '/inventory/help/$topicId'])
 
 type T = SourceRouteTypes<typeof shared>
 
+const { id: _id, path: _path, getParentRoute: _getParentRoute, ...sourceOptions } = shared.options as any
+
 export const Route = createFileRoute('/inventory/help/$topicId')<
   Register,
   T['searchValidator'],
@@ -69,7 +71,7 @@ export const Route = createFileRoute('/inventory/help/$topicId')<
   T['ssr'],
   T['middlewares'],
   T['handlers']
->({ ...shared.options } as any)
+>({ ...sourceOptions })
 `,
       );
    });
@@ -96,7 +98,7 @@ patchSharedHooks(sharedLazy, ['/help/chart', '/inventory/help/chart'])
 
 const { id: _id, ...lazyOptions } = sharedLazy.options
 
-export const Route = createLazyFileRoute('/inventory/help/chart')(lazyOptions)
+export const Route = createLazyFileRoute('/inventory/help/chart')({ ...lazyOptions })
 `,
       );
    });

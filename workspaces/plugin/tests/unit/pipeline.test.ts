@@ -79,7 +79,7 @@ describe("runPipeline", () => {
          "patchSharedHooks(sharedLazy, ['/help/chart', '/finances/help/chart', '/inventory/help/chart'])",
       );
       expect(lazy).toContain("const { id: _id, ...lazyOptions } = sharedLazy.options");
-      expect(lazy).toContain("createLazyFileRoute('/finances/help/chart')(lazyOptions)");
+      expect(lazy).toContain("createLazyFileRoute('/finances/help/chart')({ ...lazyOptions })");
 
       // ignored/helper files are not mirrored
       expect(exists(path.join(root, "src/routes/inventory/help/-notes.ts"))).toBe(false);
@@ -333,6 +333,21 @@ describe("runPipeline", () => {
       expect(readFile(path.join(root, ".gitignore"))).not.toContain(GITIGNORE_BLOCK_START);
    });
 
+   it("warns on relative escapes valid under only some mounts", () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/help/$topicId.tsx": `${stockRouteSource("/help/$topicId")}const go = { to: '../../stock' }\nconst fine = { to: '..' }\n`,
+         "src/routes/inventory/stock.tsx": stockRouteSource("/inventory/stock"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
+      });
+      const summary = runPipeline(makeConfig(root));
+      const lintWarnings = summary.errors.filter((warning) => warning.includes("relative target"));
+      expect(lintWarnings).toHaveLength(1);
+      expect(lintWarnings[0]).toContain("'../../stock'");
+      expect(lintWarnings[0]).toContain("missing under /help/$topicId");
+      expect(lintWarnings[0]).toContain("exists under /inventory/help/$topicId");
+   });
+
    it("runs cleanly on a project with no mounts", () => {
       const root = makeTmpDir();
       writeTree(root, { "src/routes/index.tsx": stockRouteSource("/") });
@@ -349,6 +364,7 @@ describe("runPipeline", () => {
          sourceRoots: [],
          targetDirs: [],
          wrappersBySource: {},
+         lintWarnings: [],
       });
    });
 });
