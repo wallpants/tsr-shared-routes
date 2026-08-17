@@ -3,7 +3,7 @@
  * @ts-expect-error line MUST error for this file to compile — proving the
  * types are strict, not `any`. Type-only; never imported.
  */
-import { Link, getRouteApi } from "@tanstack/react-router";
+import { Link, getRouteApi, useParams } from "@tanstack/react-router";
 import { Route as topicRoute } from "./routes/help/$topicId";
 import { shared as topicShared } from "./routes/help/$topicId.gen";
 import { shared as faqShared } from "./routes/help/guides/faq.gen";
@@ -100,6 +100,18 @@ export function OverlappingSourceProbes() {
    // @ts-expect-error unknown property
    faqShared.useLoaderData().nope;
    return { viaSettings, viaOuter, answers };
+}
+
+export function StrictFalseProbes() {
+   // `strict: false` types against the merge of EVERY route's params, so it
+   // is the canary for a poisoned registration: a single route registering
+   // `unknown` params absorbs the whole union (`X | unknown = unknown`) and
+   // degrades every strict-false call site in the app.
+   const params = useParams({ strict: false });
+   const tid: string | undefined = params.topicId;
+   // @ts-expect-error unknown param — errors only while params is a real object type
+   params.nope;
+   return { tid };
 }
 
 export function RequiredSearchProbes() {

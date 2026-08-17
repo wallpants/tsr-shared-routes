@@ -2,10 +2,10 @@ import type {
    AnyRoute,
    FileRoutesByPath,
    RouteApi,
+   RouteOptions,
    UseNavigateResult,
 } from "@tanstack/react-router";
 import { Link, useMatch, useNavigate, useRouter } from "@tanstack/react-router";
-import type { Route as RouteCore } from "@tanstack/router-core";
 import * as React from "react";
 
 /**
@@ -40,48 +40,45 @@ type MountFullPath<TMountPaths extends string> = MountEntry<TMountPaths>["fullPa
 
 /**
  * Input-level generics of a stock route file's `Route` export, extracted for
- * wrapper emission. Matching is nominal against `@tanstack/router-core`'s
- * `Route` interface (the type `createFileRoute(...)(...)` returns) — several
- * generics are not recoverable from `Route['types']` members because they
- * only appear there in resolved form (e.g. `ResolveLoaderData<TLoaderFn>`),
- * hence the positional infer. Requires the app to resolve the same
- * `@tanstack/router-core` copy as `@tanstack/react-router` does (it is a
- * peer dependency of tsr-shared-routes for exactly this reason); a duplicated
- * copy degrades this type to `never`, which fails the typecheck loudly.
+ * wrapper emission. Matching is positional against the `Route['options']`
+ * member (`RouteOptions<...>`), which carries every generic in input form —
+ * they are not recoverable from `Route['types']` members because they only
+ * appear there in resolved form (e.g. `ResolveLoaderData<TLoaderFn>`).
+ * Everything resolves through `@tanstack/react-router`'s own exports, so the
+ * types always agree with the router instance the app actually uses.
  */
-export type SourceRouteTypes<TRoute> =
-   TRoute extends RouteCore<
+export type SourceRouteTypes<TRoute> = TRoute extends {
+   options: RouteOptions<
       infer _TRegister,
       infer _TParentRoute,
-      infer _TPath,
-      infer _TFullPath,
-      infer _TCustomId,
       infer _TId,
+      infer _TCustomId,
+      infer _TFullPath,
+      infer _TPath,
       infer TSearchValidator,
       infer TParams,
+      infer TLoaderDeps,
+      infer TLoaderFn,
       infer _TRouterContext,
       infer TRouteContextFn,
       infer TBeforeLoadFn,
-      infer TLoaderDeps,
-      infer TLoaderFn,
-      infer _TChildren,
-      infer _TFileRouteTypes,
       infer TSSR,
       infer TServerMiddlewares,
       infer THandlers
-   >
-      ? {
-           searchValidator: TSearchValidator;
-           params: TParams;
-           routeContextFn: TRouteContextFn;
-           beforeLoadFn: TBeforeLoadFn;
-           loaderDeps: TLoaderDeps;
-           loaderFn: TLoaderFn;
-           ssr: TSSR;
-           middlewares: TServerMiddlewares;
-           handlers: THandlers;
-        }
-      : never;
+   >;
+}
+   ? {
+        searchValidator: TSearchValidator;
+        params: TParams;
+        routeContextFn: TRouteContextFn;
+        beforeLoadFn: TBeforeLoadFn;
+        loaderDeps: TLoaderDeps;
+        loaderFn: TLoaderFn;
+        ssr: TSSR;
+        middlewares: TServerMiddlewares;
+        handlers: THandlers;
+     }
+   : never;
 
 /**
  * Union-typed view over one source file's mounts: every hook is typed

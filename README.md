@@ -13,10 +13,8 @@ I created this mostly because in some projects I have modals which I build as ro
 ## Quick start
 
 ```sh
-bun add tsr-shared-routes @tanstack/router-core
+bun add tsr-shared-routes
 ```
-
-(`@tanstack/router-core` is a peer dependency — it is already a dependency of `@tanstack/react-router`, but the generated code imports one type from it directly, so strict package managers need it declared.)
 
 Add the plugin **before** `tanstackStart()` (or `tanstackRouter()`):
 
@@ -166,7 +164,7 @@ All options are optional (zero config works). Pass them to `sharedRoutes({ … }
 - **Parent-derived types are home-typed in option functions**: `beforeLoad`/`loader` in a source file are typechecked against the home mount's parent chain only. If another mount's parents provide different context or inherited search, nothing flags it at compile time. Union hooks (`shared.*`) are honest at read sites; option functions cannot be.
 - **Escape navigation is ANY-mount typed** (see above).
 - **Start static route inspection sees the wrappers as opaque**: prerender auto-detection and server-only pruning work for the home location (a plain stock file) but not for the extra mounts.
-- **Runtime patching is version-coupled**: `patchSharedHooks` replaces hook properties that `@tanstack/react-router` binds in its Route constructors; `SourceRouteTypes` infers positionally against `@tanstack/router-core`'s `Route` interface. A resolver that duplicates `router-core` degrades the wrapper types to `never` — loudly, at typecheck time; the fix is aligning the `@tanstack/router-core` version with the one `@tanstack/react-router` resolves.
+- **Runtime patching is version-coupled**: `patchSharedHooks` replaces hook properties that `@tanstack/react-router` binds in its Route constructors; `SourceRouteTypes` infers positionally against the `RouteOptions` generics exported by `@tanstack/react-router`. An `@tanstack/react-router` release that reorders those generics degrades the wrapper types to `never` — loudly, at typecheck time.
 
 ## License
 

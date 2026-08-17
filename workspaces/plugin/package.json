@@ -52,7 +52,6 @@
   },
   "devDependencies": {
     "@tanstack/react-router": "^1.170.27",
-    "@tanstack/router-core": "^1.171.22",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.18",
     "react": "^19.2.8",
@@ -63,7 +62,6 @@
   },
   "peerDependencies": {
     "@tanstack/react-router": ">=1.170.0",
-    "@tanstack/router-core": ">=1.171.0",
     "react": ">=18.0.0",
     "vite": ">=5.0.0"
   },

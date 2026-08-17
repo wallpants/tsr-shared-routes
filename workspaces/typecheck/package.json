@@ -14,7 +14,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tanstack/router-core": "1.171.24",
     "@tanstack/router-generator": "^1.167.28",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.8",
