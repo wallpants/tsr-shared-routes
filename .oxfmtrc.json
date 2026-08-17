@@ -1,6 +1,18 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": [".github", "*.gen.ts"],
+  "ignorePatterns": [
+    ".github",
+    "*.gen.ts",
+    "*.gen.tsx",
+    // example-including-generated commits its generated output; the mount
+    // target dirs below are fully generated — formatting them would fight
+    // the generator (it rewrites files that differ from its own output).
+    "workspaces/example-including-generated/src/routes/about/$sharedOneChild/",
+    "workspaces/example-including-generated/src/routes/about/shared-one/",
+    "workspaces/example-including-generated/src/routes/about/shared-two/",
+    "workspaces/example-including-generated/src/routes/home/$sharedOneChild/",
+    "workspaces/example-including-generated/src/routes/home/shared-one/shared-two/"
+  ],
   "printWidth": 100,
   "tabWidth": 3,
   // "sortImports": {
