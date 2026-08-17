@@ -20,6 +20,7 @@ src/routes/about/shared-two/
 src/routes/home/$sharedOneChild/
 src/routes/home/shared-one/$sharedOneChild/**/*.gen.*
 src/routes/home/shared-one/**/*.gen.*
+src/routes/home/shared-one/shared-two/
 src/routes/home/shared-two/**/*.gen.*
 src/sharedRoutes.gen.ts
 # <<< tsr-shared-routes

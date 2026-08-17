@@ -17,11 +17,14 @@ import { Route as HelpTopicIdRouteImport } from './routes/help/$topicId'
 import { Route as HelpChartRouteImport } from './routes/help/chart'
 import { Route as InventoryHelpRouteRouteImport } from './routes/inventory/help/route'
 import { Route as InventoryStockRouteImport } from './routes/inventory/stock'
+import { Route as ModalOpenRouteImport } from './routes/modal/open'
 import { Route as HelpGuidesFaqRouteImport } from './routes/help/guides/faq'
+import { Route as HelpModalOpenRouteImport } from './routes/help/modal/open'
 import { Route as InventoryHelpTopicIdRouteImport } from './routes/inventory/help/$topicId'
 import { Route as InventoryHelpChartRouteImport } from './routes/inventory/help/chart'
 import { Route as SettingsGuidesFaqRouteImport } from './routes/settings/guides/faq'
 import { Route as InventoryHelpGuidesFaqRouteImport } from './routes/inventory/help/guides/faq'
+import { Route as InventoryHelpModalOpenRouteImport } from './routes/inventory/help/modal/open'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -63,9 +66,19 @@ const InventoryStockRoute = InventoryStockRouteImport.update({
   path: '/stock',
   getParentRoute: () => InventoryRouteRoute,
 } as any)
+const ModalOpenRoute = ModalOpenRouteImport.update({
+  id: '/modal/open',
+  path: '/modal/open',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HelpGuidesFaqRoute = HelpGuidesFaqRouteImport.update({
   id: '/guides/faq',
   path: '/guides/faq',
+  getParentRoute: () => HelpRouteRoute,
+} as any)
+const HelpModalOpenRoute = HelpModalOpenRouteImport.update({
+  id: '/modal/open',
+  path: '/modal/open',
   getParentRoute: () => HelpRouteRoute,
 } as any)
 const InventoryHelpTopicIdRoute = InventoryHelpTopicIdRouteImport.update({
@@ -90,6 +103,11 @@ const InventoryHelpGuidesFaqRoute = InventoryHelpGuidesFaqRouteImport.update({
   path: '/guides/faq',
   getParentRoute: () => InventoryHelpRouteRoute,
 } as any)
+const InventoryHelpModalOpenRoute = InventoryHelpModalOpenRouteImport.update({
+  id: '/modal/open',
+  path: '/modal/open',
+  getParentRoute: () => InventoryHelpRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -100,11 +118,14 @@ export interface FileRoutesByFullPath {
   '/help/$topicId': typeof HelpTopicIdRoute
   '/help/chart': typeof HelpChartRoute
   '/inventory/stock': typeof InventoryStockRoute
+  '/modal/open': typeof ModalOpenRoute
   '/help/guides/faq': typeof HelpGuidesFaqRoute
+  '/help/modal/open': typeof HelpModalOpenRoute
   '/inventory/help/$topicId': typeof InventoryHelpTopicIdRoute
   '/inventory/help/chart': typeof InventoryHelpChartRoute
   '/settings/guides/faq': typeof SettingsGuidesFaqRoute
   '/inventory/help/guides/faq': typeof InventoryHelpGuidesFaqRoute
+  '/inventory/help/modal/open': typeof InventoryHelpModalOpenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -115,11 +136,14 @@ export interface FileRoutesByTo {
   '/help/$topicId': typeof HelpTopicIdRoute
   '/help/chart': typeof HelpChartRoute
   '/inventory/stock': typeof InventoryStockRoute
+  '/modal/open': typeof ModalOpenRoute
   '/help/guides/faq': typeof HelpGuidesFaqRoute
+  '/help/modal/open': typeof HelpModalOpenRoute
   '/inventory/help/$topicId': typeof InventoryHelpTopicIdRoute
   '/inventory/help/chart': typeof InventoryHelpChartRoute
   '/settings/guides/faq': typeof SettingsGuidesFaqRoute
   '/inventory/help/guides/faq': typeof InventoryHelpGuidesFaqRoute
+  '/inventory/help/modal/open': typeof InventoryHelpModalOpenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,11 +155,14 @@ export interface FileRoutesById {
   '/help/$topicId': typeof HelpTopicIdRoute
   '/help/chart': typeof HelpChartRoute
   '/inventory/stock': typeof InventoryStockRoute
+  '/modal/open': typeof ModalOpenRoute
   '/help/guides/faq': typeof HelpGuidesFaqRoute
+  '/help/modal/open': typeof HelpModalOpenRoute
   '/inventory/help/$topicId': typeof InventoryHelpTopicIdRoute
   '/inventory/help/chart': typeof InventoryHelpChartRoute
   '/settings/guides/faq': typeof SettingsGuidesFaqRoute
   '/inventory/help/guides/faq': typeof InventoryHelpGuidesFaqRoute
+  '/inventory/help/modal/open': typeof InventoryHelpModalOpenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -148,11 +175,14 @@ export interface FileRouteTypes {
     | '/help/$topicId'
     | '/help/chart'
     | '/inventory/stock'
+    | '/modal/open'
     | '/help/guides/faq'
+    | '/help/modal/open'
     | '/inventory/help/$topicId'
     | '/inventory/help/chart'
     | '/settings/guides/faq'
     | '/inventory/help/guides/faq'
+    | '/inventory/help/modal/open'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -163,11 +193,14 @@ export interface FileRouteTypes {
     | '/help/$topicId'
     | '/help/chart'
     | '/inventory/stock'
+    | '/modal/open'
     | '/help/guides/faq'
+    | '/help/modal/open'
     | '/inventory/help/$topicId'
     | '/inventory/help/chart'
     | '/settings/guides/faq'
     | '/inventory/help/guides/faq'
+    | '/inventory/help/modal/open'
   id:
     | '__root__'
     | '/'
@@ -178,11 +211,14 @@ export interface FileRouteTypes {
     | '/help/$topicId'
     | '/help/chart'
     | '/inventory/stock'
+    | '/modal/open'
     | '/help/guides/faq'
+    | '/help/modal/open'
     | '/inventory/help/$topicId'
     | '/inventory/help/chart'
     | '/settings/guides/faq'
     | '/inventory/help/guides/faq'
+    | '/inventory/help/modal/open'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -190,6 +226,7 @@ export interface RootRouteChildren {
   HelpRouteRoute: typeof HelpRouteRouteWithChildren
   InventoryRouteRoute: typeof InventoryRouteRouteWithChildren
   RequiredSearchRoute: typeof RequiredSearchRoute
+  ModalOpenRoute: typeof ModalOpenRoute
   SettingsGuidesFaqRoute: typeof SettingsGuidesFaqRoute
 }
 
@@ -251,11 +288,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryStockRouteImport
       parentRoute: typeof InventoryRouteRoute
     }
+    '/modal/open': {
+      id: '/modal/open'
+      path: '/modal/open'
+      fullPath: '/modal/open'
+      preLoaderRoute: typeof ModalOpenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/help/guides/faq': {
       id: '/help/guides/faq'
       path: '/guides/faq'
       fullPath: '/help/guides/faq'
       preLoaderRoute: typeof HelpGuidesFaqRouteImport
+      parentRoute: typeof HelpRouteRoute
+    }
+    '/help/modal/open': {
+      id: '/help/modal/open'
+      path: '/modal/open'
+      fullPath: '/help/modal/open'
+      preLoaderRoute: typeof HelpModalOpenRouteImport
       parentRoute: typeof HelpRouteRoute
     }
     '/inventory/help/$topicId': {
@@ -286,6 +337,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof InventoryHelpGuidesFaqRouteImport
       parentRoute: typeof InventoryHelpRouteRoute
     }
+    '/inventory/help/modal/open': {
+      id: '/inventory/help/modal/open'
+      path: '/modal/open'
+      fullPath: '/inventory/help/modal/open'
+      preLoaderRoute: typeof InventoryHelpModalOpenRouteImport
+      parentRoute: typeof InventoryHelpRouteRoute
+    }
   }
 }
 
@@ -293,12 +351,14 @@ interface HelpRouteRouteChildren {
   HelpTopicIdRoute: typeof HelpTopicIdRoute
   HelpChartRoute: typeof HelpChartRoute
   HelpGuidesFaqRoute: typeof HelpGuidesFaqRoute
+  HelpModalOpenRoute: typeof HelpModalOpenRoute
 }
 
 const HelpRouteRouteChildren: HelpRouteRouteChildren = {
   HelpTopicIdRoute: HelpTopicIdRoute,
   HelpChartRoute: HelpChartRoute,
   HelpGuidesFaqRoute: HelpGuidesFaqRoute,
+  HelpModalOpenRoute: HelpModalOpenRoute,
 }
 
 const HelpRouteRouteWithChildren = HelpRouteRoute._addFileChildren(
@@ -309,12 +369,14 @@ interface InventoryHelpRouteRouteChildren {
   InventoryHelpTopicIdRoute: typeof InventoryHelpTopicIdRoute
   InventoryHelpChartRoute: typeof InventoryHelpChartRoute
   InventoryHelpGuidesFaqRoute: typeof InventoryHelpGuidesFaqRoute
+  InventoryHelpModalOpenRoute: typeof InventoryHelpModalOpenRoute
 }
 
 const InventoryHelpRouteRouteChildren: InventoryHelpRouteRouteChildren = {
   InventoryHelpTopicIdRoute: InventoryHelpTopicIdRoute,
   InventoryHelpChartRoute: InventoryHelpChartRoute,
   InventoryHelpGuidesFaqRoute: InventoryHelpGuidesFaqRoute,
+  InventoryHelpModalOpenRoute: InventoryHelpModalOpenRoute,
 }
 
 const InventoryHelpRouteRouteWithChildren =
@@ -339,6 +401,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpRouteRoute: HelpRouteRouteWithChildren,
   InventoryRouteRoute: InventoryRouteRouteWithChildren,
   RequiredSearchRoute: RequiredSearchRoute,
+  ModalOpenRoute: ModalOpenRoute,
   SettingsGuidesFaqRoute: SettingsGuidesFaqRoute,
 }
 export const routeTree = rootRouteImport

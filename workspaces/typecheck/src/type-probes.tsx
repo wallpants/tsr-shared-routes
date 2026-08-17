@@ -8,6 +8,7 @@ import { Route as topicRoute } from "./routes/help/$topicId";
 import { shared as topicShared } from "./routes/help/$topicId.gen";
 import { shared as faqShared } from "./routes/help/guides/faq.gen";
 import { Route as helpRoute } from "./routes/help/route";
+import { shared as modalShared } from "./routes/modal/open.gen";
 
 export function HomeTypedProbes() {
    // Stock call sites stay fully stock-typed against the home mount.
@@ -100,6 +101,27 @@ export function OverlappingSourceProbes() {
    // @ts-expect-error unknown property
    faqShared.useLoaderData().nope;
    return { viaSettings, viaOuter, answers };
+}
+
+export function NestedMountProbes() {
+   // /modal is mounted INSIDE the /help subtree (help/modal.mount.ts), and
+   // /help is itself mounted at /inventory/help — the nested-home wrapper AND
+   // the virtual wrapper both register real types in the route tree.
+   const nestedHomeApi = getRouteApi("/help/modal/open");
+   const viaNestedHome: string = nestedHomeApi.useLoaderData().dialogId;
+   const virtualApi = getRouteApi("/inventory/help/modal/open");
+   const viaVirtual: string = virtualApi.useLoaderData().dialogId;
+   // @ts-expect-error loader data is { dialogId: string }, not any
+   virtualApi.useLoaderData().nope;
+
+   // The source's sibling unions all three locations.
+   const dialogId: string = modalShared.useLoaderData().dialogId;
+   const match = modalShared.useMatch();
+   const id: "/modal/open" | "/help/modal/open" | "/inventory/help/modal/open" = match.routeId;
+   // @ts-expect-error the union is exact — no other route ids
+   const wrong: "/modal/open" | "/help/modal/open" = match.routeId;
+
+   return { viaNestedHome, viaVirtual, dialogId, id, wrong };
 }
 
 export function StrictFalseProbes() {

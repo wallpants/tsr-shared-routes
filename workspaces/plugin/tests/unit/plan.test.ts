@@ -153,17 +153,105 @@ describe("buildPlan", () => {
       expectPlanError(root, "TARGET_OVERLAP");
    });
 
-   it("rejects a mount whose target lies inside a mounted source subtree", () => {
+   it("expands a nested mount at home and under every mount of the containing subtree", () => {
       const root = makeTmpDir();
       writeTree(root, {
-         "src/routes/help/route.tsx": stockRouteSource("/help"),
          "src/routes/docs/intro.tsx": stockRouteSource("/docs/intro"),
-         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
-         // this mount's target dir (src/routes/help/docs) is inside the
+         "src/routes/help/route.tsx": stockRouteSource("/help"),
+         // nested mount: its target dir (src/routes/help/docs) is inside the
          // mounted source subtree src/routes/help
          "src/routes/help/docs.mount.ts": mountFileSource("../docs"),
+         "src/routes/inventory/help.mount.ts": mountFileSource("../help"),
       });
-      expectPlanError(root, "TARGET_INSIDE_SOURCE");
+      const plan = planFor(root);
+      const routesDir = path.join(root, "src", "routes");
+      expect(plan.targetDirs).toEqual([
+         path.join(routesDir, "help", "docs"),
+         path.join(routesDir, "inventory", "help"),
+      ]);
+      expect(plan.sourceRoots).toEqual([
+         path.join(routesDir, "docs"),
+         path.join(routesDir, "help"),
+      ]);
+      const byTarget = Object.fromEntries(
+         plan.files.map((file) => [file.targetPath, file.sourceFilePath]),
+      );
+      expect(byTarget).toEqual({
+         // nested mount at home
+         [path.join(routesDir, "help", "docs", "intro.tsx")]: path.join(
+            routesDir,
+            "docs",
+            "intro.tsx",
+         ),
+         // outer mount mirrors the source subtree…
+         [path.join(routesDir, "inventory", "help", "route.tsx")]: path.join(
+            routesDir,
+            "help",
+            "route.tsx",
+         ),
+         // …and the nested mount under it, wrapping the REAL source file
+         [path.join(routesDir, "inventory", "help", "docs", "intro.tsx")]: path.join(
+            routesDir,
+            "docs",
+            "intro.tsx",
+         ),
+      });
+   });
+
+   it("expands nested mounts transitively (two levels deep)", () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/c/leaf.tsx": stockRouteSource("/c/leaf"),
+         "src/routes/b/route.tsx": stockRouteSource("/b"),
+         "src/routes/b/c.mount.ts": mountFileSource("../c"),
+         "src/routes/a/route.tsx": stockRouteSource("/a"),
+         "src/routes/a/b.mount.ts": mountFileSource("../b"),
+         "src/routes/top/a.mount.ts": mountFileSource("../a"),
+      });
+      const plan = planFor(root);
+      const routesDir = path.join(root, "src", "routes");
+      const leafTargets = plan.files
+         .filter((file) => file.sourceFilePath === path.join(routesDir, "c", "leaf.tsx"))
+         .map((file) => file.targetPath)
+         .sort();
+      expect(leafTargets).toEqual([
+         path.join(routesDir, "a", "b", "c", "leaf.tsx"),
+         path.join(routesDir, "b", "c", "leaf.tsx"),
+         path.join(routesDir, "top", "a", "b", "c", "leaf.tsx"),
+      ]);
+   });
+
+   it("detects mount cycles across subtrees", () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/a/route.tsx": stockRouteSource("/a"),
+         "src/routes/a/x.mount.ts": mountFileSource("../b"),
+         "src/routes/b/route.tsx": stockRouteSource("/b"),
+         "src/routes/b/y.mount.ts": mountFileSource("../a"),
+      });
+      expectPlanError(root, "MOUNT_CYCLE");
+   });
+
+   it("detects a mount of its own containing subtree", () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/a/route.tsx": stockRouteSource("/a"),
+         "src/routes/a/sub/self.mount.ts": mountFileSource(".."),
+      });
+      expectPlanError(root, "MOUNT_CYCLE");
+   });
+
+   it("lenient mode skips cyclic mounts instead of aborting", () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/a/route.tsx": stockRouteSource("/a"),
+         "src/routes/a/x.mount.ts": mountFileSource("../b"),
+         "src/routes/b/route.tsx": stockRouteSource("/b"),
+         "src/routes/b/y.mount.ts": mountFileSource("../a"),
+      });
+      const plan = planFor(root, { lenient: true });
+      expect(plan.skippedMounts).toBeGreaterThan(0);
+      expect(plan.warnings.some((warning) => warning.includes("mount cycle"))).toBe(true);
    });
 
    it("rejects a mount whose source lies inside another mount's target dir", () => {

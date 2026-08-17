@@ -19,7 +19,9 @@ import { Route as HomeSharedOneChildRouteRouteImport } from './routes/home/$shar
 import { Route as HomeSharedOneRouteRouteImport } from './routes/home/shared-one/route'
 import { Route as HomeSharedTwoRouteRouteImport } from './routes/home/shared-two/route'
 import { Route as AboutSharedOneSharedOneChildRouteRouteImport } from './routes/about/shared-one/$sharedOneChild/route'
+import { Route as AboutSharedOneSharedTwoRouteRouteImport } from './routes/about/shared-one/shared-two/route'
 import { Route as HomeSharedOneSharedOneChildRouteRouteImport } from './routes/home/shared-one/$sharedOneChild/route'
+import { Route as HomeSharedOneSharedTwoRouteRouteImport } from './routes/home/shared-one/shared-two/route'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -73,10 +75,22 @@ const AboutSharedOneSharedOneChildRouteRoute =
     path: '/$sharedOneChild',
     getParentRoute: () => AboutSharedOneRouteRoute,
   } as any)
+const AboutSharedOneSharedTwoRouteRoute =
+  AboutSharedOneSharedTwoRouteRouteImport.update({
+    id: '/shared-two',
+    path: '/shared-two',
+    getParentRoute: () => AboutSharedOneRouteRoute,
+  } as any)
 const HomeSharedOneSharedOneChildRouteRoute =
   HomeSharedOneSharedOneChildRouteRouteImport.update({
     id: '/$sharedOneChild',
     path: '/$sharedOneChild',
+    getParentRoute: () => HomeSharedOneRouteRoute,
+  } as any)
+const HomeSharedOneSharedTwoRouteRoute =
+  HomeSharedOneSharedTwoRouteRouteImport.update({
+    id: '/shared-two',
+    path: '/shared-two',
     getParentRoute: () => HomeSharedOneRouteRoute,
   } as any)
 
@@ -91,7 +105,9 @@ export interface FileRoutesByFullPath {
   '/home/shared-one': typeof HomeSharedOneRouteRouteWithChildren
   '/home/shared-two': typeof HomeSharedTwoRouteRoute
   '/about/shared-one/$sharedOneChild': typeof AboutSharedOneSharedOneChildRouteRoute
+  '/about/shared-one/shared-two': typeof AboutSharedOneSharedTwoRouteRoute
   '/home/shared-one/$sharedOneChild': typeof HomeSharedOneSharedOneChildRouteRoute
+  '/home/shared-one/shared-two': typeof HomeSharedOneSharedTwoRouteRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -104,7 +120,9 @@ export interface FileRoutesByTo {
   '/home/shared-one': typeof HomeSharedOneRouteRouteWithChildren
   '/home/shared-two': typeof HomeSharedTwoRouteRoute
   '/about/shared-one/$sharedOneChild': typeof AboutSharedOneSharedOneChildRouteRoute
+  '/about/shared-one/shared-two': typeof AboutSharedOneSharedTwoRouteRoute
   '/home/shared-one/$sharedOneChild': typeof HomeSharedOneSharedOneChildRouteRoute
+  '/home/shared-one/shared-two': typeof HomeSharedOneSharedTwoRouteRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -118,7 +136,9 @@ export interface FileRoutesById {
   '/home/shared-one': typeof HomeSharedOneRouteRouteWithChildren
   '/home/shared-two': typeof HomeSharedTwoRouteRoute
   '/about/shared-one/$sharedOneChild': typeof AboutSharedOneSharedOneChildRouteRoute
+  '/about/shared-one/shared-two': typeof AboutSharedOneSharedTwoRouteRoute
   '/home/shared-one/$sharedOneChild': typeof HomeSharedOneSharedOneChildRouteRoute
+  '/home/shared-one/shared-two': typeof HomeSharedOneSharedTwoRouteRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -133,7 +153,9 @@ export interface FileRouteTypes {
     | '/home/shared-one'
     | '/home/shared-two'
     | '/about/shared-one/$sharedOneChild'
+    | '/about/shared-one/shared-two'
     | '/home/shared-one/$sharedOneChild'
+    | '/home/shared-one/shared-two'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -146,7 +168,9 @@ export interface FileRouteTypes {
     | '/home/shared-one'
     | '/home/shared-two'
     | '/about/shared-one/$sharedOneChild'
+    | '/about/shared-one/shared-two'
     | '/home/shared-one/$sharedOneChild'
+    | '/home/shared-one/shared-two'
   id:
     | '__root__'
     | '/'
@@ -159,7 +183,9 @@ export interface FileRouteTypes {
     | '/home/shared-one'
     | '/home/shared-two'
     | '/about/shared-one/$sharedOneChild'
+    | '/about/shared-one/shared-two'
     | '/home/shared-one/$sharedOneChild'
+    | '/home/shared-one/shared-two'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -240,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutSharedOneSharedOneChildRouteRouteImport
       parentRoute: typeof AboutSharedOneRouteRoute
     }
+    '/about/shared-one/shared-two': {
+      id: '/about/shared-one/shared-two'
+      path: '/shared-two'
+      fullPath: '/about/shared-one/shared-two'
+      preLoaderRoute: typeof AboutSharedOneSharedTwoRouteRouteImport
+      parentRoute: typeof AboutSharedOneRouteRoute
+    }
     '/home/shared-one/$sharedOneChild': {
       id: '/home/shared-one/$sharedOneChild'
       path: '/$sharedOneChild'
@@ -247,16 +280,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HomeSharedOneSharedOneChildRouteRouteImport
       parentRoute: typeof HomeSharedOneRouteRoute
     }
+    '/home/shared-one/shared-two': {
+      id: '/home/shared-one/shared-two'
+      path: '/shared-two'
+      fullPath: '/home/shared-one/shared-two'
+      preLoaderRoute: typeof HomeSharedOneSharedTwoRouteRouteImport
+      parentRoute: typeof HomeSharedOneRouteRoute
+    }
   }
 }
 
 interface AboutSharedOneRouteRouteChildren {
   AboutSharedOneSharedOneChildRouteRoute: typeof AboutSharedOneSharedOneChildRouteRoute
+  AboutSharedOneSharedTwoRouteRoute: typeof AboutSharedOneSharedTwoRouteRoute
 }
 
 const AboutSharedOneRouteRouteChildren: AboutSharedOneRouteRouteChildren = {
   AboutSharedOneSharedOneChildRouteRoute:
     AboutSharedOneSharedOneChildRouteRoute,
+  AboutSharedOneSharedTwoRouteRoute: AboutSharedOneSharedTwoRouteRoute,
 }
 
 const AboutSharedOneRouteRouteWithChildren =
@@ -280,10 +322,12 @@ const AboutRouteRouteWithChildren = AboutRouteRoute._addFileChildren(
 
 interface HomeSharedOneRouteRouteChildren {
   HomeSharedOneSharedOneChildRouteRoute: typeof HomeSharedOneSharedOneChildRouteRoute
+  HomeSharedOneSharedTwoRouteRoute: typeof HomeSharedOneSharedTwoRouteRoute
 }
 
 const HomeSharedOneRouteRouteChildren: HomeSharedOneRouteRouteChildren = {
   HomeSharedOneSharedOneChildRouteRoute: HomeSharedOneSharedOneChildRouteRoute,
+  HomeSharedOneSharedTwoRouteRoute: HomeSharedOneSharedTwoRouteRoute,
 }
 
 const HomeSharedOneRouteRouteWithChildren =
@@ -313,12 +357,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

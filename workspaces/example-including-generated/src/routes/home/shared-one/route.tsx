@@ -32,6 +32,15 @@ function Component() {
                      </shared.Link>
                   }
                />
+               <Button
+                  nativeButton={false}
+                  render={
+                     // shared-two is nested-mounted inside this subtree
+                     // (shared-two.mount.ts), so this relative target exists
+                     // under every mount of shared-one.
+                     <shared.Link to="shared-two">shared-two</shared.Link>
+                  }
+               />
             </DialogContent>
          </Dialog>
          <Outlet />

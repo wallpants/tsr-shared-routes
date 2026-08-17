@@ -102,7 +102,19 @@ export default mount("../home/shared-one/$childId");
 
 Now `$childId.tsx` is reachable at `/home/shared-one/$childId` (home), `/about/shared-one/$childId` (via the outer mount), and `/about/$childId` (direct) — its `.gen` sibling unions all three.
 
-Not supported: a `*.mount.ts` file **inside** a mounted subtree (mounts of mounts by nesting files), and mounting a generated wrapper directory. Both are validation errors.
+## Nested mounts
+
+A `*.mount.ts` file may live **inside** a mounted subtree. It expands at its own location like any mount, and is additionally mirrored under every mount of the containing subtree:
+
+```ts
+// src/routes/home/shared-one/modal.mount.ts  →  mounts /modal at /home/shared-one/modal
+import { mount } from "tsr-shared-routes";
+export default mount("../../modal");
+```
+
+With `/home/shared-one` mounted at `/about/shared-one`, the files of `/modal` now get routes at `/modal/*` (home), `/home/shared-one/modal/*`, and `/about/shared-one/modal/*` — every wrapper imports the real source file (never another wrapper), so the `.gen` unions, hook patching, and HMR cover all locations. Nesting is recursive; a cycle (a subtree mounting its own ancestor, directly or through another subtree) is a validation error.
+
+Not supported: mounting a generated wrapper directory — a validation error.
 
 ## `.lazy.tsx` route files
 

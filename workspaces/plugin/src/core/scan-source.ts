@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { isMountFile } from "./discover";
+import { MOUNT_FILE_RE, isMountFile } from "./discover";
 import { SharedRoutesError } from "./errors";
+import { isOwned, readIfExists } from "./fsio";
 
 /** Stock route-file extensions, minus `.vue` (unsupported, hard error). */
 const ROUTE_EXT_RE = /\.(tsx|ts|jsx|js)$/;
@@ -39,8 +40,11 @@ export interface ScanOptions {
  * Scans a mounted source subtree recursively, classifying entries exactly
  * like the stock generator's physical scan classifies the source files
  * themselves (and therefore their mirrored wrappers). Source subtrees are
- * ordinary visible route directories; the only extra rule is that they must
- * not contain mount files (nested mounts are unsupported).
+ * ordinary visible route directories and may contain mount files (nested
+ * mounts): those are never mirrored — the plan expands them — and neither is
+ * anything generated: a directory claimed by a sibling mount file holds that
+ * nested mount's wrappers, and a banner-owned file is stale output of a
+ * since-removed mount awaiting cleanup.
  */
 export function scanSourceDir(sourceDir: string, options: ScanOptions): ScanResult {
    const { routeFileIgnorePrefix } = options;
@@ -48,7 +52,14 @@ export function scanSourceDir(sourceDir: string, options: ScanOptions): ScanResu
 
    const walk = (relDir: string): void => {
       const fullDir = path.join(sourceDir, relDir);
-      for (const entry of fs.readdirSync(fullDir, { withFileTypes: true })) {
+      const entries = fs.readdirSync(fullDir, { withFileTypes: true });
+      const nestedTargets = new Set<string>();
+      for (const entry of entries) {
+         if (entry.isFile() && isMountFile(entry.name)) {
+            nestedTargets.add(entry.name.replace(MOUNT_FILE_RE, ""));
+         }
+      }
+      for (const entry of entries) {
          const name = entry.name;
          if (name.startsWith(".")) continue;
          if (routeFileIgnorePrefix !== "" && name.startsWith(routeFileIgnorePrefix)) continue;
@@ -56,17 +67,13 @@ export function scanSourceDir(sourceDir: string, options: ScanOptions): ScanResu
          const relPath = relDir === "" ? name : `${relDir}/${name}`;
 
          if (entry.isDirectory()) {
+            if (nestedTargets.has(name)) continue;
             walk(relPath);
             continue;
          }
          if (!entry.isFile()) continue;
 
-         if (isMountFile(name)) {
-            throw new SharedRoutesError(
-               "NESTED_MOUNT_UNSUPPORTED",
-               `mount files inside a mounted subtree are not supported: ${path.join(sourceDir, relPath)}. Move the mount file outside the mounted subtree.`,
-            );
-         }
+         if (isMountFile(name)) continue;
          if (GEN_FILE_RE.test(name)) continue;
          if (VUE_EXT_RE.test(name)) {
             throw new SharedRoutesError(
@@ -91,6 +98,8 @@ export function scanSourceDir(sourceDir: string, options: ScanOptions): ScanResu
                `the deprecated \`.${lastSegment}\` route-file suffix cannot be mounted (it does not export \`Route\`): ${path.join(sourceDir, relPath)}.\nMigrate it to the \`.lazy\` suffix instead.`,
             );
          }
+         const content = readIfExists(path.join(fullDir, name));
+         if (content !== undefined && isOwned(content)) continue;
          routeFiles.push({ relPath, lazy: lastSegment === "lazy" });
       }
    };

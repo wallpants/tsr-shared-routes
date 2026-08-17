@@ -1,6 +1,6 @@
+import { Generator, getConfig } from "@tanstack/router-generator";
 import fs from "node:fs";
 import path from "node:path";
-import { Generator, getConfig } from "@tanstack/router-generator";
 import { describe, expect, it } from "vitest";
 import { replaceRouteIdLiteral } from "../../src/core/fsio";
 import { runPipeline } from "../../src/core/pipeline";
@@ -238,6 +238,69 @@ describe("pipeline + real Generator", () => {
       expect(tree).toContain("'/inventory/help/guides/faq'");
       expect(tree).toContain("'/admin/help/guides/faq'");
       expect(tree).toContain("'/settings/guides/faq'");
+   });
+
+   it("nested mount: the generator builds home, nested-home, and virtual routes, all stable", async () => {
+      const root = makeProject();
+      writeTree(root, {
+         "src/routes/modal/open.tsx": stockRouteSource("/modal/open"),
+         // nested mount inside the /help subtree, which is itself mounted twice
+         "src/routes/help/modal.mount.ts": mountFileSource("../modal"),
+      });
+      const summary = runPipeline(makeConfig(root));
+      expect(summary.errors).toEqual([]);
+      const nestedGenerated = [
+         "src/routes/admin.help/modal/open.tsx",
+         "src/routes/help/modal/open.tsx",
+         "src/routes/inventory/help/modal/open.tsx",
+         "src/routes/modal/open.gen.tsx",
+      ];
+      for (const relPath of nestedGenerated) {
+         expect(exists(path.join(root, ...relPath.split("/")))).toBe(true);
+      }
+      const sibling = readFile(path.join(root, "src/routes/modal/open.gen.tsx"));
+      expect(sibling).toContain(
+         'type MountFilePaths = "/modal/open" | "/admin/help/modal/open" | "/help/modal/open" | "/inventory/help/modal/open";',
+      );
+
+      // The real generator accepts every wrapper verbatim and the tree holds
+      // the nested route under home, both outer mounts, and the source's own
+      // home location.
+      const watched = [...WRAPPERS, ...SOURCES, ...HELPERS, ...nestedGenerated];
+      const before = contentMap(root, watched);
+      await runGenerator(root);
+      expect(contentMap(root, watched)).toEqual(before);
+      const tree = routeTree(root);
+      for (const id of [
+         "'/modal/open'",
+         "'/help/modal/open'",
+         "'/inventory/help/modal/open'",
+         "'/admin/help/modal/open'",
+      ]) {
+         expect(tree).toContain(id);
+      }
+
+      // Second pipeline run after the generator: nothing to do.
+      const second = runPipeline(makeConfig(root));
+      expect(second.written).toEqual([]);
+      expect(second.adopted).toEqual([]);
+      expect(second.deleted).toEqual([]);
+
+      // Removing the nested mount drops all its routes everywhere.
+      fs.rmSync(path.join(root, "src/routes/help/modal.mount.ts"));
+      const third = runPipeline(makeConfig(root));
+      expect(third.deleted).toEqual([
+         "src/routes/admin.help/modal/open.tsx",
+         "src/routes/help/modal/open.tsx",
+         "src/routes/inventory/help/modal/open.tsx",
+         "src/routes/modal/open.gen.tsx",
+      ]);
+      await runGenerator(root);
+      const prunedTree = routeTree(root);
+      expect(prunedTree).toContain("'/modal/open'"); // the source is still a real route
+      expect(prunedTree).not.toContain("'/help/modal/open'");
+      expect(prunedTree).not.toContain("'/inventory/help/modal/open'");
+      expect(prunedTree).not.toContain("'/admin/help/modal/open'");
    });
 
    it("hand-corrupted literal: pipeline adopts, generator fixes on disk, no write war", async () => {

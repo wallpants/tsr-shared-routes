@@ -162,6 +162,60 @@ describe("runPipeline", () => {
       expect(layoutSibling).toContain('type MountFilePaths = "/help" | "/inventory/help";');
    });
 
+   it("nested mounts: expands at home and under every covering mount, wrapping real sources", () => {
+      const root = makeTmpDir();
+      writeTree(root, {
+         "src/routes/modal/open.tsx": stockRouteSource("/modal/open"),
+         "src/routes/home/shared/route.tsx": stockRouteSource("/home/shared"),
+         // nested: this mount lives inside the subtree mounted below
+         "src/routes/home/shared/modal.mount.ts": mountFileSource("../../modal"),
+         "src/routes/about/shared.mount.ts": mountFileSource("../home/shared"),
+      });
+      const summary = runPipeline(makeConfig(root));
+      expect(summary.errors).toEqual([]);
+      expect(summary.written).toEqual([
+         "src/routes/about/shared/modal/open.tsx",
+         "src/routes/about/shared/route.tsx",
+         "src/routes/home/shared/modal/open.tsx",
+         "src/routes/home/shared/route.gen.tsx",
+         "src/routes/modal/open.gen.tsx",
+         "src/sharedRoutes.gen.ts",
+         "tsr.config.json",
+      ]);
+
+      // The virtual wrapper (nested mount mirrored under the outer mount)
+      // wraps the REAL source file, never the nested home wrapper.
+      const virtual = readFile(path.join(root, "src/routes/about/shared/modal/open.tsx"));
+      expect(virtual).toContain("createFileRoute('/about/shared/modal/open')");
+      expect(virtual).toContain("import { Route as shared } from '../../../modal/open'");
+      const homeNested = readFile(path.join(root, "src/routes/home/shared/modal/open.tsx"));
+      expect(homeNested).toContain("createFileRoute('/home/shared/modal/open')");
+      expect(homeNested).toContain("import { Route as shared } from '../../../modal/open'");
+
+      // The nested source's sibling unions home + nested home + virtual ids.
+      const sibling = readFile(path.join(root, "src/routes/modal/open.gen.tsx"));
+      expect(sibling).toContain(
+         'type MountFilePaths = "/modal/open" | "/about/shared/modal/open" | "/home/shared/modal/open";',
+      );
+      // The outer mount never mirrors the nested mount file or its output dir.
+      expect(exists(path.join(root, "src/routes/about/shared/modal.mount.ts"))).toBe(false);
+
+      // Idempotent.
+      const second = runPipeline(makeConfig(root));
+      expect(second.written).toEqual([]);
+      expect(second.deleted).toEqual([]);
+
+      // Removing the nested mount removes its home AND virtual wrappers.
+      fs.rmSync(path.join(root, "src/routes/home/shared/modal.mount.ts"));
+      const third = runPipeline(makeConfig(root));
+      expect(third.deleted).toEqual([
+         "src/routes/about/shared/modal/open.tsx",
+         "src/routes/home/shared/modal/open.tsx",
+         "src/routes/modal/open.gen.tsx",
+      ]);
+      expect(exists(path.join(root, "src/routes/home/shared/modal"))).toBe(false);
+   });
+
    it("second run writes nothing", () => {
       const root = makeFixture();
       runPipeline(makeConfig(root));
