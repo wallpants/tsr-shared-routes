@@ -47,30 +47,30 @@ describe("renderWrapper", () => {
          `${DEFAULT_BANNER}
 /* eslint-disable */
 // source: src/routes/help/$topicId.tsx (mount: src/routes/inventory/help.mount.ts)
-import type { Register } from '@tanstack/react-router'
-import { createFileRoute } from '@tanstack/react-router'
-import type { SourceRouteTypes } from '../../../sharedRoutes.gen'
-import { patchSharedHooks } from '../../../sharedRoutes.gen'
-import { Route as shared } from '../../help/$topicId'
+import type { Register } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
+import type { SourceRouteTypes } from "../../../sharedRoutes.gen"
+import { patchSharedHooks } from "../../../sharedRoutes.gen"
+import { Route as shared } from "../../help/$topicId"
 
-patchSharedHooks(shared, ['/help/$topicId', '/inventory/help/$topicId'])
+patchSharedHooks(shared, ["/help/$topicId", "/inventory/help/$topicId"])
 
 type T = SourceRouteTypes<typeof shared>
 
 const { id: _id, path: _path, getParentRoute: _getParentRoute, ...sourceOptions } = shared.options as any
 
-export const Route = createFileRoute('/inventory/help/$topicId')<
+export const Route = createFileRoute("/inventory/help/$topicId")<
   Register,
-  T['searchValidator'],
-  T['params'],
-  T['routeContextFn'],
-  T['beforeLoadFn'],
-  T['loaderDeps'],
-  T['loaderFn'],
+  T["searchValidator"],
+  T["params"],
+  T["routeContextFn"],
+  T["beforeLoadFn"],
+  T["loaderDeps"],
+  T["loaderFn"],
   unknown,
-  T['ssr'],
-  T['middlewares'],
-  T['handlers']
+  T["ssr"],
+  T["middlewares"],
+  T["handlers"]
 >({ ...sourceOptions })
 `,
       );
@@ -90,15 +90,15 @@ export const Route = createFileRoute('/inventory/help/$topicId')<
          `${DEFAULT_BANNER}
 /* eslint-disable */
 // source: src/routes/help/chart.lazy.tsx (mount: src/routes/inventory/help.mount.ts)
-import { createLazyFileRoute } from '@tanstack/react-router'
-import { patchSharedHooks } from '../../../sharedRoutes.gen'
-import { Route as sharedLazy } from '../../help/chart.lazy'
+import { createLazyFileRoute } from "@tanstack/react-router"
+import { patchSharedHooks } from "../../../sharedRoutes.gen"
+import { Route as sharedLazy } from "../../help/chart.lazy"
 
-patchSharedHooks(sharedLazy, ['/help/chart', '/inventory/help/chart'])
+patchSharedHooks(sharedLazy, ["/help/chart", "/inventory/help/chart"])
 
 const { id: _id, ...lazyOptions } = sharedLazy.options
 
-export const Route = createLazyFileRoute('/inventory/help/chart')({ ...lazyOptions })
+export const Route = createLazyFileRoute("/inventory/help/chart")({ ...lazyOptions })
 `,
       );
    });
@@ -110,7 +110,7 @@ export const Route = createLazyFileRoute('/inventory/help/chart')({ ...lazyOptio
          mountIds: ["/help/$topicId", "/help/$topicId", "/inventory/help/$topicId"],
       });
       expect(content).toContain(
-         "patchSharedHooks(shared, ['/help/$topicId', '/inventory/help/$topicId'])",
+         'patchSharedHooks(shared, ["/help/$topicId", "/inventory/help/$topicId"])',
       );
    });
 });
@@ -140,7 +140,7 @@ describe("decideWrite", () => {
       );
       const decision = decideWrite(onDisk, desired);
       expect(decision.action).toBe("write");
-      expect(decision.content).toContain("createFileRoute('/generator/corrected')");
+      expect(decision.content).toContain('createFileRoute("/generator/corrected")');
       expect(decision.content).toContain("src/routes/help/$topicId.tsx");
    });
 });

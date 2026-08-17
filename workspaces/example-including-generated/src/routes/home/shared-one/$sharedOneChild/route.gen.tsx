@@ -4,18 +4,14 @@
 // mounts: /home/shared-one/$sharedOneChild, /about/$sharedOneChild, /about/shared-one/$sharedOneChild, /home/$sharedOneChild
 import { makeSharedRoute } from "../../../../sharedRoutes.gen";
 
-type MountFilePaths =
-   | "/home/shared-one/$sharedOneChild"
-   | "/about/$sharedOneChild"
-   | "/about/shared-one/$sharedOneChild"
-   | "/home/$sharedOneChild";
+type MountFilePaths = "/home/shared-one/$sharedOneChild" | "/about/$sharedOneChild" | "/about/shared-one/$sharedOneChild" | "/home/$sharedOneChild";
 
 export const shared = makeSharedRoute<MountFilePaths>(
-   [
-      "/home/shared-one/$sharedOneChild",
-      "/about/$sharedOneChild",
-      "/about/shared-one/$sharedOneChild",
-      "/home/$sharedOneChild",
-   ],
-   "src/routes/home/shared-one/$sharedOneChild/route",
+  [
+  "/home/shared-one/$sharedOneChild",
+  "/about/$sharedOneChild",
+  "/about/shared-one/$sharedOneChild",
+  "/home/$sharedOneChild",
+  ],
+  "src/routes/home/shared-one/$sharedOneChild/route",
 );

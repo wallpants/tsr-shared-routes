@@ -49,7 +49,7 @@ export function computeImportPath(fromWrapperPath: string, toSharedFilePath: str
 export function renderWrapper(spec: WrapperSpec): string {
    const routerModule = "@tanstack/react-router";
    const importPath = computeImportPath(spec.targetPath, spec.sharedFilePath);
-   const idList = [...new Set(spec.mountIds)].map((id) => `'${id}'`).join(", ");
+   const idList = [...new Set(spec.mountIds)].map((id) => JSON.stringify(id)).join(", ");
    const header = `${spec.banner}\n/* eslint-disable */\n// source: ${spec.sourceLabel} (mount: ${spec.mountLabel})\n`;
 
    // Both option arguments below are PLAIN object literals on purpose:
@@ -60,25 +60,25 @@ export function renderWrapper(spec: WrapperSpec): string {
    if (spec.kind === "wrapper-lazy") {
       return (
          header +
-         `import { createLazyFileRoute } from '${routerModule}'\n` +
-         `import { patchSharedHooks } from '${spec.runtimeSpecifier}'\n` +
-         `import { Route as sharedLazy } from '${importPath}'\n` +
+         `import { createLazyFileRoute } from "${routerModule}"\n` +
+         `import { patchSharedHooks } from "${spec.runtimeSpecifier}"\n` +
+         `import { Route as sharedLazy } from "${importPath}"\n` +
          `\n` +
          `patchSharedHooks(sharedLazy, [${idList}])\n` +
          `\n` +
          `const { id: _id, ...lazyOptions } = sharedLazy.options\n` +
          `\n` +
-         `export const Route = createLazyFileRoute('${spec.routeIdLiteral}')({ ...lazyOptions })\n`
+         `export const Route = createLazyFileRoute("${spec.routeIdLiteral}")({ ...lazyOptions })\n`
       );
    }
 
    return (
       header +
-      `import type { Register } from '${routerModule}'\n` +
-      `import { createFileRoute } from '${routerModule}'\n` +
-      `import type { SourceRouteTypes } from '${spec.runtimeSpecifier}'\n` +
-      `import { patchSharedHooks } from '${spec.runtimeSpecifier}'\n` +
-      `import { Route as shared } from '${importPath}'\n` +
+      `import type { Register } from "${routerModule}"\n` +
+      `import { createFileRoute } from "${routerModule}"\n` +
+      `import type { SourceRouteTypes } from "${spec.runtimeSpecifier}"\n` +
+      `import { patchSharedHooks } from "${spec.runtimeSpecifier}"\n` +
+      `import { Route as shared } from "${importPath}"\n` +
       `\n` +
       `patchSharedHooks(shared, [${idList}])\n` +
       `\n` +
@@ -90,18 +90,18 @@ export function renderWrapper(spec: WrapperSpec): string {
       // leak into the wrapper's createFileRoute call (id+path together throw).
       `const { id: _id, path: _path, getParentRoute: _getParentRoute, ...sourceOptions } = shared.options as any\n` +
       `\n` +
-      `export const Route = createFileRoute('${spec.routeIdLiteral}')<\n` +
+      `export const Route = createFileRoute("${spec.routeIdLiteral}")<\n` +
       `  Register,\n` +
-      `  T['searchValidator'],\n` +
-      `  T['params'],\n` +
-      `  T['routeContextFn'],\n` +
-      `  T['beforeLoadFn'],\n` +
-      `  T['loaderDeps'],\n` +
-      `  T['loaderFn'],\n` +
+      `  T["searchValidator"],\n` +
+      `  T["params"],\n` +
+      `  T["routeContextFn"],\n` +
+      `  T["beforeLoadFn"],\n` +
+      `  T["loaderDeps"],\n` +
+      `  T["loaderFn"],\n` +
       `  unknown,\n` +
-      `  T['ssr'],\n` +
-      `  T['middlewares'],\n` +
-      `  T['handlers']\n` +
+      `  T["ssr"],\n` +
+      `  T["middlewares"],\n` +
+      `  T["handlers"]\n` +
       `>({ ...sourceOptions })\n`
    );
 }

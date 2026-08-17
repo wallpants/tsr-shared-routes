@@ -62,24 +62,24 @@ describe("runPipeline", () => {
 
       const wrapper = readFile(path.join(root, "src/routes/inventory/help/route.tsx"));
       expect(wrapper.startsWith(BANNER_SENTINEL)).toBe(true);
-      expect(wrapper).toContain("createFileRoute('/inventory/help')");
-      expect(wrapper).toContain("import { Route as shared } from '../../help/route'");
+      expect(wrapper).toContain('createFileRoute("/inventory/help")');
+      expect(wrapper).toContain('import { Route as shared } from "../../help/route"');
       expect(wrapper).toContain(
-         "patchSharedHooks(shared, ['/help', '/finances/help', '/inventory/help'])",
+         'patchSharedHooks(shared, ["/help", "/finances/help", "/inventory/help"])',
       );
-      expect(wrapper).toContain("import { patchSharedHooks } from '../../../sharedRoutes.gen'");
+      expect(wrapper).toContain('import { patchSharedHooks } from "../../../sharedRoutes.gen"');
       expect(wrapper).toContain("type T = SourceRouteTypes<typeof shared>");
       expect(wrapper).toContain(
          "// source: src/routes/help/route.tsx (mount: src/routes/inventory/help.mount.ts)",
       );
 
       const lazy = readFile(path.join(root, "src/routes/finances/help/chart.lazy.tsx"));
-      expect(lazy).toContain("import { Route as sharedLazy } from '../../help/chart.lazy'");
+      expect(lazy).toContain('import { Route as sharedLazy } from "../../help/chart.lazy"');
       expect(lazy).toContain(
-         "patchSharedHooks(sharedLazy, ['/help/chart', '/finances/help/chart', '/inventory/help/chart'])",
+         'patchSharedHooks(sharedLazy, ["/help/chart", "/finances/help/chart", "/inventory/help/chart"])',
       );
       expect(lazy).toContain("const { id: _id, ...lazyOptions } = sharedLazy.options");
-      expect(lazy).toContain("createLazyFileRoute('/finances/help/chart')({ ...lazyOptions })");
+      expect(lazy).toContain('createLazyFileRoute("/finances/help/chart")({ ...lazyOptions })');
 
       // ignored/helper files are not mirrored
       expect(exists(path.join(root, "src/routes/inventory/help/-notes.ts"))).toBe(false);
@@ -154,7 +154,7 @@ describe("runPipeline", () => {
       const outer = readFile(path.join(root, "src/routes/inventory/help/guides/faq.tsx"));
       const direct = readFile(path.join(root, "src/routes/settings/guides/faq.tsx"));
       const patchLine =
-         "patchSharedHooks(shared, ['/help/guides/faq', '/inventory/help/guides/faq', '/settings/guides/faq'])";
+         'patchSharedHooks(shared, ["/help/guides/faq", "/inventory/help/guides/faq", "/settings/guides/faq"])';
       expect(outer).toContain(patchLine);
       expect(direct).toContain(patchLine);
       // route.tsx is only covered by the outer mount
@@ -186,11 +186,11 @@ describe("runPipeline", () => {
       // The virtual wrapper (nested mount mirrored under the outer mount)
       // wraps the REAL source file, never the nested home wrapper.
       const virtual = readFile(path.join(root, "src/routes/about/shared/modal/open.tsx"));
-      expect(virtual).toContain("createFileRoute('/about/shared/modal/open')");
-      expect(virtual).toContain("import { Route as shared } from '../../../modal/open'");
+      expect(virtual).toContain('createFileRoute("/about/shared/modal/open")');
+      expect(virtual).toContain('import { Route as shared } from "../../../modal/open"');
       const homeNested = readFile(path.join(root, "src/routes/home/shared/modal/open.tsx"));
-      expect(homeNested).toContain("createFileRoute('/home/shared/modal/open')");
-      expect(homeNested).toContain("import { Route as shared } from '../../../modal/open'");
+      expect(homeNested).toContain('createFileRoute("/home/shared/modal/open")');
+      expect(homeNested).toContain('import { Route as shared } from "../../../modal/open"');
 
       // The nested source's sibling unions home + nested home + virtual ids.
       const sibling = readFile(path.join(root, "src/routes/modal/open.gen.tsx"));
