@@ -4,11 +4,10 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import type { SharedRoutesUserConfig } from "./config";
-import { resolveConfig } from "./config";
+import { CONFIG_FILE_NAME, readConfigFile, resolveConfig } from "./config";
 import { runPipeline } from "./core/pipeline";
 
-/** Optional config file read from the project root. */
-export const CONFIG_FILE_NAME = "shared-routes.config.json";
+export { CONFIG_FILE_NAME } from "./config";
 
 const USAGE = [
    "Usage: tsr-shared-routes generate [--check] [--root <dir>]",
@@ -61,13 +60,14 @@ function parseArgs(
    return { check, root };
 }
 
-function readConfigFile(root: string, io: CliIO): SharedRoutesUserConfig | { exitCode: number } {
-   const configPath = path.join(root, CONFIG_FILE_NAME);
-   if (!fs.existsSync(configPath)) return {};
+function readConfigFileSafe(
+   root: string,
+   io: CliIO,
+): SharedRoutesUserConfig | { exitCode: number } {
    try {
-      return JSON.parse(fs.readFileSync(configPath, "utf8")) as SharedRoutesUserConfig;
+      return readConfigFile(root);
    } catch (error) {
-      io.error(`tsr-shared-routes: could not parse ${configPath}: ${(error as Error).message}`);
+      io.error((error as Error).message);
       return { exitCode: 1 };
    }
 }
@@ -83,7 +83,7 @@ export function main(argv: Array<string>, io: CliIO = defaultIO): number {
    if ("exitCode" in parsed) return parsed.exitCode;
    const { check, root } = parsed;
 
-   const userConfig = readConfigFile(root, io);
+   const userConfig = readConfigFileSafe(root, io);
    if ("exitCode" in userConfig) return userConfig.exitCode;
 
    try {

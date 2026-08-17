@@ -142,11 +142,19 @@ tsr-shared-routes generate --check    # CI drift guard: exit 1 if anything would
 tsr-shared-routes generate --root x   # project root (default: cwd)
 ```
 
-The CLI runs only this tool's pipeline — your build runs the stock generator as usual. Optional config file: `shared-routes.config.json` at the project root (same options as the plugin). `--check` matters for CI because the generated files must exist for a bare `tsc` run.
+The CLI runs only this tool's pipeline — your build runs the stock generator as usual. It reads the same `shared-routes.config.json` as the vite plugin (see Configuration). `--check` matters for CI because the generated files must exist for a bare `tsc` run.
 
 ## Configuration
 
-All options are optional (zero config works). Pass them to `sharedRoutes({ … })` or put them in `shared-routes.config.json`.
+All options are optional (zero config works). Prefer `shared-routes.config.json` at the project root — both the vite plugin and the CLI read it, so one file configures every entry point:
+
+```json
+{
+  "routesDirectory": "./app/routes"
+}
+```
+
+Options passed inline to `sharedRoutes({ … })` act as vite-scoped overrides: they win per key over the file, and the plugin logs any key set in both places with different values so an override is never silent. (The CLI does not see inline options — anything it needs must be in the file.)
 
 | Option                  | Default                                           | Description                                                        |
 | ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------ |

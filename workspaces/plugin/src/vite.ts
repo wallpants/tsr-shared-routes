@@ -2,7 +2,7 @@ import path from "node:path";
 import process from "node:process";
 import type { Plugin } from "vite";
 import type { SharedRoutesConfig, SharedRoutesUserConfig } from "./config";
-import { resolveConfig } from "./config";
+import { mergeConfigSources, readConfigFile, resolveConfig } from "./config";
 import { isMountFile } from "./core/discover";
 import { runtimeModulePath } from "./core/emit-runtime";
 import type { PipelineSummary } from "./core/pipeline";
@@ -132,11 +132,16 @@ export function sharedRoutes(userConfig: SharedRoutesUserConfig = {}): Plugin {
 
       async config(viteConfig, env) {
          const root = path.resolve(viteConfig.root ?? process.cwd());
-         resolved = resolveConfig(userConfig, root);
+         // Same sources as the CLI: config file as the base, inline options
+         // winning per key — so the file configures both entry points and
+         // inline stays a vite-scoped override.
+         const { merged, conflicts } = mergeConfigSources(readConfigFile(root), userConfig);
+         resolved = resolveConfig(merged, root);
          routesDir = path.resolve(root, resolved.routesDirectory);
          runtimePath = runtimeModulePath(routesDir);
          isServe = env.command === "serve";
          applySummary(runPipeline(resolved, { lenient: true }));
+         pendingWarnings.push(...conflicts.map((conflict) => `tsr-shared-routes: ${conflict}`));
       },
 
       // Dev only: append the lint console listener to the served runtime
