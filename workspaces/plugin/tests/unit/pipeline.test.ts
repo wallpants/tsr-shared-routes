@@ -515,9 +515,16 @@ describe("runPipeline mid-edit DX", () => {
       expect(exists(wrapper)).toBe(true);
       expect(broken.deleted).toEqual([]);
       expect(broken.errors.some((w) => w.includes("skipping invalid mount file"))).toBe(true);
+      // warnings surface root-relative paths, never absolute ones
+      expect(broken.errors.some((w) => w.includes(root))).toBe(false);
+      expect(broken.errors.some((w) => w.includes("src/routes/inventory/help.mount.ts"))).toBe(
+         true,
+      );
 
-      // strict mode still throws for the same state
-      expect(() => runPipeline(makeConfig(root))).toThrow(SharedRoutesError);
+      // strict mode still throws for the same state (also with relative paths)
+      expect(() => runPipeline(makeConfig(root))).toThrow(
+         "invalid mount file src/routes/inventory/help.mount.ts",
+      );
 
       // mount healed: back to normal, nothing stale
       writeTree(root, {

@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { SharedRoutesConfig } from "../config";
+import type { DiscoverResult } from "./discover";
 import { discoverMounts } from "./discover";
 import { helperPathFor, renderHelper } from "./emit-helper";
 import { renderRuntimeModule, runtimeModulePath, runtimeSpecifierFor } from "./emit-runtime";
@@ -11,6 +12,7 @@ import type { EscapeLintFile } from "./lint-escapes";
 import { collectRouteFiles, lintRelativeEscapes } from "./lint-escapes";
 import type { Manifest, ManifestFileEntry } from "./manifest";
 import { cleanupStale, readManifest, writeManifest } from "./manifest";
+import type { Plan } from "./plan";
 import { buildPlan } from "./plan";
 import { computeRouteIdLiteral } from "./route-id";
 import { hasRouteExport } from "./scaffold";
@@ -86,11 +88,23 @@ export function runPipeline(
          routeToken: config.routeToken,
       });
 
+   // Discovery and planning build their messages with absolute paths; strip
+   // the root prefix here — the one exit point to the CLI and the vite
+   // logger — so everything user-facing reads root-relative.
+   const relMsg = (message: string): string => message.split(root + path.sep).join("");
+
    // 1-2. Discover + plan (throws only in strict mode / on global conflicts).
-   const discovery = discoverMounts(routesDir, { lenient, scaffold });
-   const plan = buildPlan(config, discovery.mounts, { lenient });
-   const warnings = [...discovery.warnings, ...plan.warnings];
-   const incomplete = [...discovery.incomplete];
+   let discovery: DiscoverResult;
+   let plan: Plan;
+   try {
+      discovery = discoverMounts(routesDir, { lenient, scaffold });
+      plan = buildPlan(config, discovery.mounts, { lenient });
+   } catch (error) {
+      if (error instanceof SharedRoutesError) error.message = relMsg(error.message);
+      throw error;
+   }
+   const warnings = [...discovery.warnings, ...plan.warnings].map(relMsg);
+   const incomplete = discovery.incomplete.map(relMsg);
    const scaffolded = [...discovery.scaffolded];
    const skippedMounts = discovery.skipped.length + plan.skippedMounts;
 
